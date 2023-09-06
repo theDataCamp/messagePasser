@@ -70,16 +70,7 @@ def on_key_press(key):
 
 
 def keys_pressed_recently(keys, window=0.5):
-    """Check if all keys have been pressed within the given time window."""
-    current_time = time.time()
-
-    for key in keys:
-        if key not in key_press_times:
-            return False
-        difference = current_time - key_press_times[key]
-        if difference > window:
-            return False
-    return True
+    return all(key_press_times.get(key, 0) >= time.time() - window for key in keys)
 
 
 def process_and_send_command(user_input, sock):
@@ -143,9 +134,9 @@ def send_data_to_slave():
 
 
 def sync_macros(sock):
-    payload = {"type": "SYNC_MACROS", "data": MACROS}
-    message = json.dumps(payload)
-    sock.sendall(message.encode('utf-8'))
+    execute_db_query('INSERT OR REPLACE INTO macros VALUES (?, ?)', list(MACROS.items()))
+    send_data = json.dumps({"type": "SYNC_MACROS", "data": MACROS})
+    sock.sendall(send_data.encode('utf-8'))
 
 
 # Slave functions
@@ -271,29 +262,31 @@ class App:
             self.start_slave()
 
     def start_master(self):
-        if not self.running:
-            try:
-                self.listener = keyboard.Listener(on_press=on_key_press)
-                self.listener.start()
+        if self.running:
+            return
+        try:
+            self.listener = keyboard.Listener(on_press=on_key_press)
+            self.listener.start()
 
-                self.current_thread = threading.Thread(target=send_data_to_slave)
-                self.current_thread.start()
-                self.running = True
-                self.start_button.config(state="disabled")
-                self.stop_button.config(state="normal")
-            except Exception as e:
-                messagebox.showerror("Error", str(e))
+            self.current_thread = threading.Thread(target=send_data_to_slave)
+            self.current_thread.start()
+            self.running = True
+            self.start_button.config(state="disabled")
+            self.stop_button.config(state="normal")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
     def start_slave(self):
-        if not self.running:
-            try:
-                self.current_thread = threading.Thread(target=listen_for_data)
-                self.current_thread.start()
-                self.running = True
-                self.start_button.config(state="disabled")
-                self.stop_button.config(state="normal")
-            except Exception as e:
-                messagebox.showerror("Error", str(e))
+        if self.running:
+            return
+        try:
+            self.current_thread = threading.Thread(target=listen_for_data)
+            self.current_thread.start()
+            self.running = True
+            self.start_button.config(state="disabled")
+            self.stop_button.config(state="normal")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
     def stop(self):
         # Implement any necessary cleanup and stop logic here.
@@ -390,7 +383,6 @@ class App:
             messagebox.showerror("Error", "Macro not found in dictionary.")
 
         self.load_macros_into_listbox()
-
 
 
 if __name__ == "__main__":
