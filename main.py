@@ -160,7 +160,15 @@ def send_data_to_slave():
 
 def sync_macros(sock):
     logging.info(f"sync_macros: INSERT or REPLACE MACROS: {MACROS}")
-    DatabaseManager.execute_db_query('INSERT OR REPLACE INTO macros VALUES (?, ?)', list(MACROS.items()))
+    data = list(MACROS.items())
+    # Calculate the number of columns to insert (this assumes that all tuples in `data` have the same length)
+    num_columns = len(data[0]) if data else 0
+
+    # Generate the appropriate number of placeholders
+    placeholders = ', '.join('?' * num_columns)
+    # Create the SQL query string
+    query = f'INSERT OR REPLACE INTO macros VALUES ({placeholders})'
+    DatabaseManager.execute_db_query(query, list(MACROS.items()))
     send_data = json.dumps({"type": "SYNC_MACROS", "data": MACROS})
     logging.info(f"sync_macros: sending data: {send_data}")
     sock.sendall(send_data.encode('utf-8'))
