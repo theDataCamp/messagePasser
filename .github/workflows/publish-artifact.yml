@@ -18,7 +18,7 @@ jobs:
         python-version: '3.11'
 
     - name: Install dependencies
-      run: pip install -r requirements.txt || echo "No requirements.txt yet."
+      run: if [ -f "requirements.txt" ]; then pip install -r requirements.txt else echo "No requirements.txt yet."
 
     - name: Generate requirements
       run: pip freeze > requirements.txt
