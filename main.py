@@ -16,13 +16,16 @@ import sqlite3
 # Constants and shared functions
 
 # Added logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(module)s.%(funcName)s] %(message)s')
 
 HOST = '10.0.0.221'
 PORT = 65432
 SHARED_SECRET = "JosueAlemanIsASecretPassword"
 DB_NAME = "macros.db"
 is_macros_updated = False
+BUFFER_SIZE = 4096
+AUTH_SUCCESS = "AUTH_SUCCESS"
+AUTH_FAILED = "AUTH_FAILED"
 
 MACROS = {
     "ctrl_l+alt_l+r": ["KEYS:right"],
@@ -72,6 +75,7 @@ class DatabaseManager:
 
     @staticmethod
     def sync_macros_to_db(received_macros):
+        logging.info(f" Received macros to sync: {received_macros}")
         with DatabaseManager.get_db_connection() as c:
             c.execute('DELETE FROM macros')
             c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
@@ -90,13 +94,13 @@ class DatabaseManager:
 def on_key_press(key):
     try:
         key_name = key.char  # For regular keys
-        logger.info(f"on_key_press: it is a char (regular keys)")
+        logging.info(f"it is a char (regular keys)")
     
     except AttributeError:
         key_name = key.name  # For special keys
-        logger.info(f"on_key_press: it is a name (special key)")
+        logging.info(f"it is a name (special key)")
 
-    logger.info(f"Key pressed: {key_name}")
+    logging.info(f"Key pressed: {key_name}")
     key_press_times[key_name] = time.time()
 
 
@@ -128,45 +132,51 @@ def hash_challenge(challenge):
 
 # Master functions
 def send_data_to_slave():
-    with socket.create_connection((HOST, PORT)) as sock:
-        # Receive challenge from the slave
-        challenge = sock.recv(4096).decode()
+    try:
+        with socket.create_connection((HOST, PORT)) as sock:
+            if not authenticate_with_slave(sock):
+                logging.error(f"Authentication failed")
+                return
+            logging.info("Authentication successful")
+            sync_macros(sock)
+            main_master_loop(sock)
 
-        # Hash the challenge with the shared secret and send it back
-        response = hash_challenge(challenge)
-        sock.sendall(response.encode())
+    except Exception as e:
+        logging.error(f"Error in sending data to slave: {e}")
 
-        # Receive authentication status
-        auth_status = sock.recv(4096).decode()
-        if auth_status != "AUTH_SUCCESS":
-            logging.error("Authentication failed!")
-            return
-        logging.info("Authentication successful!")
-        sync_macros(sock)
 
-        while True:
-            global is_macros_updated
-            if is_macros_updated:
-                sync_macros(sock)
-                is_macros_updated = False
+def authenticate_with_slave(sock):
+    challenge = sock.recv(BUFFER_SIZE).decode()
+    response = hash_challenge(challenge)
+    sock.sendall(response.encode())
+    auth_status = sock.recv(BUFFER_SIZE).decode()
+    return auth_status == AUTH_SUCCESS
 
-            for hotkey, commands in MACROS.copy().items():
-                required_keys = set(hotkey.split('+'))
 
-                if keys_pressed_recently(required_keys):
-                    for command in commands:
-                        process_and_send_command(command, sock)
+def main_master_loop(sock):
+    while True:
+        global is_macros_updated
+        if is_macros_updated:
+            sync_macros(sock)
+            is_macros_updated = False
 
-                    # Clear the key press times for the macro so it's not triggered repeatedly
-                    for key in required_keys:
-                        key_press_times.pop(key, None)
+        for hotkey, commands in MACROS.copy().items():
+            if should_execute_macro(hotkey):
+                for command in commands:
+                    process_and_send_command(command, sock)
 
-                    # Delay to avoid rapid firing and give time for key release
-                    time.sleep(0.5)
+                time.sleep(0.5)  # Delay to avoid rapid firing
 
+def should_execute_macro(hotkey):
+    required_keys = set(hotkey.split('+'))
+    if keys_pressed_recently(required_keys):
+        for key in required_keys:
+            key_press_times.pop(key, None)
+        return True
+    return False
 
 def sync_macros(sock):
-    logging.info(f"sync_macros: INSERT or REPLACE MACROS: {MACROS}")
+    logging.info(f"INSERT or REPLACE MACROS: {MACROS}")
     data = list(MACROS.items())
     # Calculate the number of columns to insert (this assumes that all tuples in `data` have the same length)
     num_columns = len(data[0]) if data else 0
@@ -177,7 +187,7 @@ def sync_macros(sock):
     query = f'INSERT OR REPLACE INTO macros VALUES ({placeholders})'
     DatabaseManager.execute_db_query(query, list(MACROS.items()))
     send_data = json.dumps({"type": "SYNC_MACROS", "data": MACROS})
-    logging.info(f"sync_macros: sending data: {send_data}")
+    logging.info(f"sending data: {send_data}")
     sock.sendall(send_data.encode('utf-8'))
 
 
@@ -221,6 +231,8 @@ def listen_for_data():
                 if payload["type"] == "SYNC_MACROS":
                     received_macros = payload["data"]
                     DatabaseManager.sync_macros_to_db(received_macros)
+                    if App.instance:
+                        App.instance.load_macros_into_listbox()
                 elif payload["type"] == "exit":
                     logging.info("Exiting...")
                     break
@@ -239,7 +251,10 @@ def listen_for_data():
 # Tkinter app
 
 class App:
+    instance = None
     def __init__(self, root):
+        self.listener = None
+        App.instance = self
         self.mode = StringVar(value="master")
 
         Radiobutton(root, text="Master", variable=self.mode, value="master").grid(row=0, column=0, sticky="w")
@@ -325,15 +340,7 @@ class App:
             messagebox.showerror("Error", str(e))
 
     def stop(self):
-        # Implement any necessary cleanup and stop logic here.
-        # NOTE: Stopping threads cleanly can be a bit tricky, especially when they're
-        # doing blocking tasks like network communication.
-        # Below is a simple method but it might not work in all scenarios.
-
         if self.current_thread and self.current_thread.is_alive():
-            # This forcefully terminates the thread. This can be problematic,
-            # especially if resources (like network sockets) aren't properly closed.
-            # In real-world scenarios, you would implement a safer method.
             self.current_thread._stop()
 
         self.running = False
