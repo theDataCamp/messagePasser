@@ -1,9 +1,11 @@
 import socket
+import logging
 import json
 import hashlib
 import time
 import random
 from contextlib import contextmanager
+from enum import Enum
 from tkinter.ttk import Scrollbar, Combobox
 
 from pynput import keyboard
@@ -13,6 +15,9 @@ import threading
 import sqlite3
 
 # Constants and shared functions
+
+# Added logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 HOST = '10.0.0.221'
 PORT = 65432
@@ -31,41 +36,50 @@ MACROS = {
 key_press_times = {}
 
 
-@contextmanager
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    try:
-        yield c
-    finally:
-        conn.commit()
-        conn.close()
-
-
-def initialize_db():
-    with get_db_connection() as c:
-        c.execute('''CREATE TABLE IF NOT EXISTS macros(hotkey TEXT PRIMARY KEY, action TEXT)''')
-
-
-def execute_db_query(query, params=()):
-    with get_db_connection() as c:
+class DatabaseManager:
+    @staticmethod
+    @contextmanager
+    def get_db_connection():
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
         try:
-            c.execute(query, params)
-        except sqlite3.Error as e:
-            print(f"Database error: {e}")
+            yield c
+        finally:
+            conn.commit()
+            conn.close()
 
+    @staticmethod
+    def initialize_db():
+        with DatabaseManager.get_db_connection() as c:
+            c.execute('CREATE TABLE IF NOT EXISTS macros(hotkey TEXT PRIMARY KEY, action TEXT)')
 
-# Load existing macros from the database into MACROS dictionary
-def load_macros_from_db():
-    global MACROS
-    with get_db_connection() as c:
-        for hotkey, action in c.execute('SELECT * FROM macros'):
-            MACROS[hotkey] = action.split(',')
+    @staticmethod
+    def load_macros_from_db():
+        global MACROS
+        with DatabaseManager.get_db_connection() as c:
+            for hotkey, action in c.execute('SELECT * FROM macros'):
+                MACROS[hotkey] = action.split(',')
+
+    @staticmethod
+    def sync_macros_to_db(received_macros):
+        with DatabaseManager.get_db_connection() as c:
+            c.execute('DELETE FROM macros')
+            c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
+                          [(hotkey, ','.join(action)) for hotkey, action in received_macros.items()])
+
+    @staticmethod
+    def execute_db_query(query, params=()):
+        logging.info(f"Executing {query} with params: {params}")
+        with DatabaseManager.get_db_connection() as c:
+            try:
+                c.execute(query, params)
+            except sqlite3.Error as e:
+                logging.error(f"Database error: {e}")
 
 
 def on_key_press(key):
     key_name = getattr(key, 'char', None) or key.name
-    print(f"Key pressed: {key_name}")
+    logging.info(f"Key pressed: {key_name}")
     key_press_times[key_name] = time.time()
 
 
@@ -83,10 +97,11 @@ def process_and_send_command(user_input, sock):
         keys = user_input[len("KEYS:"):].strip().split('+')
         payload = {"type": "keys", "data": keys}
     else:
-        print("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
+        logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
         return
 
     message = json.dumps(payload)
+    logging.info(f"Sending message: {message}")
     sock.sendall(message.encode('utf-8'))
 
 
@@ -107,9 +122,9 @@ def send_data_to_slave():
         # Receive authentication status
         auth_status = sock.recv(4096).decode()
         if auth_status != "AUTH_SUCCESS":
-            print("Authentication failed!")
+            logging.error("Authentication failed!")
             return
-        print("Authentication successful!")
+        logging.info("Authentication successful!")
         sync_macros(sock)
 
         while True:
@@ -134,8 +149,10 @@ def send_data_to_slave():
 
 
 def sync_macros(sock):
-    execute_db_query('INSERT OR REPLACE INTO macros VALUES (?, ?)', list(MACROS.items()))
+    logging.info(f"sync_macros: INSERT or REPLACE MACROS: {MACROS}")
+    DatabaseManager.execute_db_query('INSERT OR REPLACE INTO macros VALUES (?, ?)', list(MACROS.items()))
     send_data = json.dumps({"type": "SYNC_MACROS", "data": MACROS})
+    logging.info(f"sync_macros: sending data: {send_data}")
     sock.sendall(send_data.encode('utf-8'))
 
 
@@ -145,11 +162,11 @@ def listen_for_data():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
-        print("Listening for input...")
+        logging.info("Listening for input...")
 
         conn, addr = s.accept()
         with conn:
-            print('Connected by', addr)
+            logging.info('Connected by', addr)
 
             # Send a random challenge to the master
             challenge = str(random.randint(100000, 999999))
@@ -160,10 +177,10 @@ def listen_for_data():
 
             # Verify the response
             if response == hash_challenge(challenge):
-                print("Authentication successful!")
+                logging.info("Authentication successful!")
                 conn.sendall("AUTH_SUCCESS".encode())
             else:
-                print("Authentication failed!")
+                logging.error("Authentication failed!")
                 conn.sendall("AUTH_FAILED".encode())
                 return
 
@@ -171,15 +188,16 @@ def listen_for_data():
                 data_received = conn.recv(4096).decode()
 
                 if not data_received:
-                    print("Connection lost...")
+                    logging.warning("Connection lost...")
                     break
 
                 payload = json.loads(data_received)
+                logging.info(f"Received payload: {payload}")
                 if payload["type"] == "SYNC_MACROS":
                     received_macros = payload["data"]
-                    sync_macros_to_db(received_macros)
+                    DatabaseManager.sync_macros_to_db(received_macros)
                 elif payload["type"] == "exit":
-                    print("Exiting...")
+                    logging.info("Exiting...")
                     break
                 elif payload["type"] == "text":
                     pyautogui.write(payload["data"])
@@ -191,13 +209,6 @@ def listen_for_data():
                 elif payload["type"] == "mouse_move_rel":
                     dx, dy = payload["data"]["dx"], payload["data"]["dy"]
                     pyautogui.move(dx, dy)
-
-
-def sync_macros_to_db(received_macros):
-    with get_db_connection() as c:
-        c.execute('DELETE FROM macros')
-        c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
-                      [(hotkey, ','.join(action)) for hotkey, action in received_macros.items()])
 
 
 # Tkinter app
@@ -306,11 +317,14 @@ class App:
 
     def load_macros_into_listbox(self):
         self.macro_listbox.delete(0, 'end')  # clear existing items
+        logging.info(f"loading macros into list box: {MACROS}")
         for hotkey, actions in MACROS.items():
+            logging.info(f"hotkey: {hotkey} actions: {actions}")
             self.macro_listbox.insert('end', f"Hotkey: {hotkey}, Action: {actions[0]}")
 
     def update_db_and_dict(self, hotkey, action):
-        with get_db_connection() as c:
+        logging.info(f"Updating DB and Dict with hotkey:{hotkey} action:{action}")
+        with DatabaseManager.get_db_connection() as c:
             c.execute("INSERT OR REPLACE INTO macros VALUES (?, ?)", (hotkey, action))
         MACROS[hotkey] = [action]
         global is_macros_updated
@@ -321,6 +335,7 @@ class App:
         hotkey = simpledialog.askstring("Input", "Enter the hotkey:")
         action = simpledialog.askstring("Input", "Enter the action:") if hotkey else None
         if hotkey and action:
+            logging.info(f"Adding Macro: hotkey:{hotkey} action:{action}")
             self.update_db_and_dict(hotkey, action)
 
     def edit_macro(self):
@@ -341,14 +356,17 @@ class App:
         new_action = simpledialog.askstring("Input", f"Edit the action for {new_hotkey}", initialvalue=existing_action)
 
         if new_hotkey and new_action:
+            logging.info(f"edit_macro Updating DB: new hotkey{new_hotkey}  new action:{new_action}")
             # Update database
-            with get_db_connection() as c:
+            with DatabaseManager.get_db_connection() as c:
                 c.execute("DELETE FROM macros WHERE hotkey = ?", (existing_hotkey,))
                 c.execute("INSERT INTO macros (hotkey, action) VALUES (?, ?)", (new_hotkey, new_action))
 
             # Update MACROS dictionary
+            logging.info(f"edit_macro: old MACROS: {MACROS}")
             del MACROS[existing_hotkey]
             MACROS[new_hotkey] = [new_action]
+            logging.info(f"edit_macro: new MACROS: {MACROS}")
             global is_macros_updated
             is_macros_updated = True
             self.load_macros_into_listbox()
@@ -362,20 +380,22 @@ class App:
         confirm = messagebox.askyesno("Confirm", "Are you sure you want to delete this macro?")
         if not confirm:
             return
-
-        selected_string = self.macro_listbox.get(
-            selected[0])  # Note that curselection returns a tuple, hence selected[0]
+        # Note that curselection returns a tuple, hence selected[0]
+        selected_string = self.macro_listbox.get(selected[0])
 
         # Extracting the actual hotkey from the selected string
         hotkey = selected_string.split(",")[0].split(":")[1].strip()
 
         # Delete from database
-        with get_db_connection() as c:
+        logging.info(f"delete_macro: looking for DB hotkey: {hotkey}")
+        with DatabaseManager.get_db_connection() as c:
             c.execute("DELETE FROM macros WHERE hotkey = ?", (hotkey,))
 
         # Delete from MACROS dictionary
         try:
+            logging.info(f"delete_macro: old MACROS: {MACROS}")
             del MACROS[hotkey]
+            logging.info(f"delete_macro: new MACROS:{MACROS}")
             global is_macros_updated
             is_macros_updated = True
 
@@ -386,8 +406,8 @@ class App:
 
 
 if __name__ == "__main__":
-    initialize_db()
-    load_macros_from_db()
+    DatabaseManager.initialize_db()
+    DatabaseManager.load_macros_from_db()
     root = Tk()
     root.title("Master/Slave App")
     app = App(root)
