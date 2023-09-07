@@ -5,7 +5,6 @@ import hashlib
 import time
 import random
 from contextlib import contextmanager
-from enum import Enum
 from tkinter.ttk import Scrollbar, Combobox
 
 from pynput import keyboard
@@ -52,6 +51,17 @@ class DatabaseManager:
     def initialize_db():
         with DatabaseManager.get_db_connection() as c:
             c.execute('CREATE TABLE IF NOT EXISTS macros(hotkey TEXT PRIMARY KEY, action TEXT)')
+
+            # Check if the table is empty
+            c.execute('SELECT COUNT(*) FROM macros')
+            count = c.fetchone()[0]
+            logging.info(f"Checking to see if macros table is empty, has a count of {count}")
+
+            # If the table is empty, populate it with default macros
+            if count == 0:
+                logging.info(f"Count is 0, loading the following macros from script: {MACROS}")
+                c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
+                              [(hotkey, ','.join(action)) for hotkey, action in MACROS.items()])
 
     @staticmethod
     def load_macros_from_db():
