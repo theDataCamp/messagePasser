@@ -88,8 +88,15 @@ class DatabaseManager:
 
 
 def on_key_press(key):
-    key_name = getattr(key, 'char', None) or key.name
-    logging.info(f"Key pressed: {key_name}")
+    try:
+        key_name = key.char  # For regular keys
+        logger.info(f"on_key_press: it is a char (regular keys)")
+    
+    except AttributeError:
+        key_name = key.name  # For special keys
+        logger.info(f"on_key_press: it is a name (special key)")
+
+    logger.info(f"Key pressed: {key_name}")
     key_press_times[key_name] = time.time()
 
 
