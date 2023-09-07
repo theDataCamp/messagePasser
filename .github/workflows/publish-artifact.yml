@@ -18,7 +18,10 @@ jobs:
         python-version: '3.11'
 
     - name: Install dependencies
-      run: pip install -r requirements.txt
+      run: pip install -r requirements.txt || echo "No requirements.txt yet."
+
+    - name: Generate requirements
+      run: pip freeze > requirements.txt
 
     - name: Install pyinstaller
       run: pip install pyinstaller
@@ -31,4 +34,10 @@ jobs:
       with:
         name: Message_Sender
         path: .\dist\main.exe
+
+    - name: Upload requirements.txt
+      uses: actions/upload-artifact@v2
+      with:
+        name: requirements
+        path: requirements.txt
       
