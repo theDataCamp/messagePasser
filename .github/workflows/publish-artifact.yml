@@ -1,0 +1,34 @@
+name: Publish Artifact
+
+on:
+  push:
+    branches:
+      -main
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Set up python 3.11
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Install pyinstaller
+      run: pip install pyinstaller
+
+    - name: Create Executable
+      run: pyinstaller --onefile main.py
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: Message_Sender
+        path: .\dist\main.exe
+      
