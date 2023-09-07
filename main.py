@@ -95,7 +95,7 @@ def on_key_press(key):
     try:
         key_name = key.char  # For regular keys
         logging.info(f"it is a char (regular keys)")
-    
+
     except AttributeError:
         key_name = key.name  # For special keys
         logging.info(f"it is a name (special key)")
@@ -130,7 +130,11 @@ def hash_challenge(challenge):
     return hashlib.sha256((challenge + SHARED_SECRET).encode()).hexdigest()
 
 
-# Master functions
+"""
+Master Functions--------------------
+"""
+
+
 def send_data_to_slave():
     try:
         with socket.create_connection((HOST, PORT)) as sock:
@@ -167,6 +171,7 @@ def main_master_loop(sock):
 
                 time.sleep(0.5)  # Delay to avoid rapid firing
 
+
 def should_execute_macro(hotkey):
     required_keys = set(hotkey.split('+'))
     if keys_pressed_recently(required_keys):
@@ -174,6 +179,7 @@ def should_execute_macro(hotkey):
             key_press_times.pop(key, None)
         return True
     return False
+
 
 def sync_macros(sock):
     logging.info(f"INSERT or REPLACE MACROS: {MACROS}")
@@ -191,67 +197,105 @@ def sync_macros(sock):
     sock.sendall(send_data.encode('utf-8'))
 
 
-# Slave functions
+"""
+Slave Functions--------------------
+"""
+
 
 def listen_for_data():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen()
-        logging.info("Listening for input...")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((HOST, PORT))
+            s.listen()
+            logging.info("Listening for input...")
 
-        conn, addr = s.accept()
-        with conn:
-            logging.info('Connected by', addr)
+            conn, addr = s.accept()
+            handle_slave_connection(conn, addr)
+    except Exception as e:
+        logging.error(f"Error in listen_for_data: {e}")
 
-            # Send a random challenge to the master
-            challenge = str(random.randint(100000, 999999))
-            conn.sendall(challenge.encode())
 
-            # Receive the hashed response
-            response = conn.recv(4096).decode()
+def handle_slave_connection(connection, addr):
+    with connection:
+        logging.info(f'Connected by {addr}')
 
-            # Verify the response
-            if response == hash_challenge(challenge):
-                logging.info("Authentication successful!")
-                conn.sendall("AUTH_SUCCESS".encode())
-            else:
-                logging.error("Authentication failed!")
-                conn.sendall("AUTH_FAILED".encode())
-                return
+        if authenticate_master(connection):
+            logging.info("Authentication successful!")
+            connection.sendall(AUTH_SUCCESS.encode())
+            main_slave_loop(connection)
+        else:
+            logging.error("Authentication failed!")
+            connection.sendall(AUTH_FAILED.encode())
 
-            while True:
-                data_received = conn.recv(4096).decode()
 
-                if not data_received:
-                    logging.warning("Connection lost...")
-                    break
+def authenticate_master(connection):
+    challenge = generate_challenge()
+    connection.sendall(challenge.encode())
+    response = connection.recv(BUFFER_SIZE).decode()
+    return validate_response(response, challenge)
 
-                payload = json.loads(data_received)
-                logging.info(f"Received payload: {payload}")
-                if payload["type"] == "SYNC_MACROS":
-                    received_macros = payload["data"]
-                    DatabaseManager.sync_macros_to_db(received_macros)
-                    if App.instance:
-                        App.instance.load_macros_into_listbox()
-                elif payload["type"] == "exit":
-                    logging.info("Exiting...")
-                    break
-                elif payload["type"] == "text":
-                    pyautogui.write(payload["data"])
-                elif payload["type"] == "keys":
-                    pyautogui.hotkey(*payload["data"])
-                elif payload["type"] == "mouse_move":
-                    x, y = payload["data"]["x"], payload["data"]["y"]
-                    pyautogui.moveTo(x, y)
-                elif payload["type"] == "mouse_move_rel":
-                    dx, dy = payload["data"]["dx"], payload["data"]["dy"]
-                    pyautogui.move(dx, dy)
+
+def main_slave_loop(connection):
+    while True:
+        data_received = connection.recv(BUFFER_SIZE).decode()
+        if not data_received:
+            logging.warning("Connection lost...")
+            break
+        process_received_payload(data_received, connection)
+
+
+def generate_challenge():
+    return str(random.randint(100000, 999999))
+
+
+def validate_response(response, challenge):
+    return response == hash_challenge(challenge)
+
+
+def process_received_payload(data_received, connection):
+    payload = json.loads(data_received)
+    logging.info(f"Received payload: {payload}")
+
+    payload_type = payload.get("type")
+    if payload_type == "SYNC_MACROS":
+        handle_sync_macros(payload)
+    elif payload_type == "exit":
+        logging.info("Exiting...")
+        connection.close()
+    elif payload_type == "text":
+        pyautogui.write(payload["data"])
+    elif payload_type == "keys":
+        pyautogui.hotkey(*payload["data"])
+    elif payload_type == "mouse_move":
+        handle_mouse_move(payload)
+    elif payload_type == "mouse_move_rel":
+        handle_mouse_move_relative(payload)
+    else:
+        logging.warning(f"Unknown payload type: {payload_type}")
+
+
+def handle_sync_macros(payload):
+    received_macros = payload["data"]
+    DatabaseManager.sync_macros_to_db(received_macros)
+    if App.instance:
+        App.instance.load_macros_into_listbox()
+
+
+def handle_mouse_move(payload):
+    x, y = payload["data"]["x"], payload["data"]["y"]
+    pyautogui.moveTo(x, y)
+
+
+def handle_mouse_move_relative(payload):
+    dx, dy = payload["data"]["dx"], payload["data"]["dy"]
+    pyautogui.move(dx, dy)
 
 
 # Tkinter app
 
 class App:
     instance = None
+
     def __init__(self, root):
         self.listener = None
         App.instance = self
