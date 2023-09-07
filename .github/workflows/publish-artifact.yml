@@ -17,6 +17,12 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Install pipreqs
+      run: pip install pipreqs
+
+    - name: Generate requirements.txt with pipreqs
+      run: pipreqs .
+
     - name: Install dependencies
       run: |
         if [ -f "requirements.txt" ]; then 
@@ -25,7 +31,9 @@ jobs:
           echo "No requirements.txt yet."
         fi
       shell: bash
-
+    - name: Debug List of Installed packages
+      run: pip list 
+      
     - name: Generate requirements
       run: pip freeze > requirements.txt
 
