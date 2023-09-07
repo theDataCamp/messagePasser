@@ -3,7 +3,7 @@ name: Publish Artifact
 on:
   push:
     branches:
-      -main
+      - master
 jobs:
   build:
     runs-on: windows-latest
