@@ -69,8 +69,10 @@ class DatabaseManager:
     @staticmethod
     def load_macros_from_db():
         global MACROS
+        logging.info(f"Current MACROS: {MACROS}")
         with DatabaseManager.get_db_connection() as c:
             for hotkey, action in c.execute('SELECT * FROM macros'):
+                logging.info(f"loading: {hotkey} with action: {action}")
                 MACROS[hotkey] = action.split(',')
 
     @staticmethod
@@ -277,6 +279,7 @@ def process_received_payload(data_received, connection):
 def handle_sync_macros(payload):
     received_macros = payload["data"]
     DatabaseManager.sync_macros_to_db(received_macros)
+    DatabaseManager.load_macros_from_db()
     if App.instance:
         App.instance.load_macros_into_listbox()
 
