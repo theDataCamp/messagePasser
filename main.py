@@ -476,6 +476,9 @@ class App:
 
         # Delete from MACROS dictionary
         try:
+            global MACROS
+            MACROS = {}
+            DatabaseManager.load_macros_from_db()
             logging.info(f"old MACROS: {MACROS}")
             del MACROS[hotkey]
             logging.info(f"new MACROS:{MACROS}")
