@@ -16,7 +16,8 @@ import sqlite3
 # Constants and shared functions
 
 # Added logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(module)s.%(funcName)s] %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
+                                               '[%(module)s.%(funcName)s] %(message)s')
 
 HOST = '10.0.0.221'
 PORT = 65432
@@ -69,8 +70,10 @@ class DatabaseManager:
     @staticmethod
     def load_macros_from_db():
         global MACROS
+        logging.info(f"Current MACROS: {MACROS}")
         with DatabaseManager.get_db_connection() as c:
             for hotkey, action in c.execute('SELECT * FROM macros'):
+                logging.info(f"loading: {hotkey} with action: {action}")
                 MACROS[hotkey] = action.split(',')
 
     @staticmethod
@@ -161,6 +164,7 @@ def main_master_loop(sock):
     while True:
         global is_macros_updated
         if is_macros_updated:
+            logging.info(f"macros updates, triggering sync_macros")
             sync_macros(sock)
             is_macros_updated = False
 
@@ -182,16 +186,18 @@ def should_execute_macro(hotkey):
 
 
 def sync_macros(sock):
-    logging.info(f"INSERT or REPLACE MACROS: {MACROS}")
+    logging.info(f"Current macros to sync {MACROS}")
     data = list(MACROS.items())
+    logging.info(f"data from macros: {data}")
     # Calculate the number of columns to insert (this assumes that all tuples in `data` have the same length)
     num_columns = len(data[0]) if data else 0
+    logging.info(f"column count from MACROS: {num_columns}")
 
     # Generate the appropriate number of placeholders
     placeholders = ', '.join('?' * num_columns)
     # Create the SQL query string
     query = f'INSERT OR REPLACE INTO macros VALUES ({placeholders})'
-    DatabaseManager.execute_db_query(query, list(MACROS.items()))
+    DatabaseManager.execute_db_query(query, data)
     send_data = json.dumps({"type": "SYNC_MACROS", "data": MACROS})
     logging.info(f"sending data: {send_data}")
     sock.sendall(send_data.encode('utf-8'))
@@ -277,6 +283,7 @@ def process_received_payload(data_received, connection):
 def handle_sync_macros(payload):
     received_macros = payload["data"]
     DatabaseManager.sync_macros_to_db(received_macros)
+    DatabaseManager.load_macros_from_db()
     if App.instance:
         App.instance.load_macros_into_listbox()
 
@@ -469,9 +476,12 @@ class App:
 
         # Delete from MACROS dictionary
         try:
-            logging.info(f"delete_macro: old MACROS: {MACROS}")
+            global MACROS
+            MACROS = {}
+            DatabaseManager.load_macros_from_db()
+            logging.info(f"old MACROS: {MACROS}")
             del MACROS[hotkey]
-            logging.info(f"delete_macro: new MACROS:{MACROS}")
+            logging.info(f"new MACROS:{MACROS}")
             global is_macros_updated
             is_macros_updated = True
 
