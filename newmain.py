@@ -98,9 +98,11 @@ class HotkeyManager:
         self.listener.start()
 
     def on_key_down(self, key):
+        print(f"down: {key}")
         self.current_keys.add(key)
 
     def on_key_up(self, key):
+        print(f"up: {key}")
         self.on_activate()
         self.current_keys.discard(key)
 
