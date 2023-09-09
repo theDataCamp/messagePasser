@@ -41,13 +41,13 @@ jobs:
       run: pip install pyinstaller
 
     - name: Create Executable
-      run: pyinstaller --onefile newmain.py
+      run: pyinstaller --onefile main.py
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3
       with:
         name: Message_Sender
-        path: .\dist\newmain.exe
+        path: .\dist\main.exe
 
     - name: Upload requirements.txt
       uses: actions/upload-artifact@v3
