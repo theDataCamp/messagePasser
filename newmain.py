@@ -1,3 +1,4 @@
+import time
 import tkinter as tk
 from tkinter import ttk, StringVar
 import socket
@@ -102,6 +103,7 @@ class HotkeyManager:
         print(f"key down: {key}")
         if any([key in combo for combo in MACROS.keys()]):
             self.current_keys.add(key)
+            time.sleep(0.5)
             self.on_activate()
 
     def on_key_up(self, key):
