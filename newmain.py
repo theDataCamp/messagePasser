@@ -99,14 +99,17 @@ class HotkeyManager:
         self.listener.start()
 
     def on_key_down(self, key):
+        print(f"key down: {key}")
         if any([key in combo for combo in MACROS.keys()]):
             self.current_keys.add(key)
             self.on_activate()
 
     def on_key_up(self, key):
+        print(f"key up: {key}")
         self.current_keys.discard(key)
 
     def on_activate(self):
+        print(f"Current keys: {self.current_keys}")
         action = MACROS.get(frozenset(self.current_keys))
         if action:
             if action['type'] == 'PRESS_KEY':
