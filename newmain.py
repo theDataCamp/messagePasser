@@ -10,9 +10,12 @@ PORT = 65432
 BUFFER_SIZE = 1024
 
 MACROS = {
-    frozenset([keyboard.Key.ctrl, keyboard.Key.alt, keyboard.KeyCode.from_char('r')]): {'type': 'PRESS_KEY', 'action': 'right'},
-    frozenset([keyboard.Key.ctrl, keyboard.Key.alt, keyboard.KeyCode.from_char('t')]): {'type': 'TYPE_TEXT', 'action': 'Hello World'}
+    frozenset([keyboard.Key.ctrl, keyboard.Key.alt, keyboard.KeyCode.from_char('r')]): {'type': 'PRESS_KEY',
+                                                                                        'action': 'right'},
+    frozenset([keyboard.Key.ctrl, keyboard.Key.alt, keyboard.KeyCode.from_char('t')]): {'type': 'TYPE_TEXT',
+                                                                                        'action': 'Hello World'}
 }
+
 
 class AppGUI:
     def __init__(self, master):
@@ -53,11 +56,12 @@ class AppGUI:
 class ConnectionManager:
     def __init__(self, is_master=True, host='127.0.0.1'):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.host = host
         if is_master:
             threading.Thread(target=self.start_master).start()
         else:
             threading.Thread(target=self.start_slave).start()
-        self.host = host
+
 
     def start_master(self):
         self.s.bind((self.host, PORT))
