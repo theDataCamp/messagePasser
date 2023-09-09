@@ -101,9 +101,11 @@ class HotkeyManager:
 
     def on_key_down(self, key):
         print(f"key down: {key}")
+        print(f"Macro keys: {MACROS.keys()}")
         if any([key in combo for combo in MACROS.keys()]):
+            print(f"Adding to current_keys: {key}")
             self.current_keys.add(key)
-            time.sleep(0.5)
+            time.sleep(0.1)
             self.on_activate()
 
     def on_key_up(self, key):
