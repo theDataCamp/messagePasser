@@ -111,6 +111,7 @@ class HotkeyManager:
     def on_activate(self):
         print(f"Current keys: {self.current_keys}")
         action = MACROS.get(frozenset(self.current_keys))
+        print(f"action: {action}")
         if action:
             if action['type'] == 'PRESS_KEY':
                 print(f'Hotkey for pressing key {action["action"]} activated')
