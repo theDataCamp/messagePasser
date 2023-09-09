@@ -93,6 +93,7 @@ class ConnectionManager:
 class HotkeyManager:
     def __init__(self, conn_manager):
         self.conn_manager = conn_manager
+        self.key_flusher = KeyFlusher()
         self.listener = keyboard.Listener(on_press=self.on_key_down, on_release=self.on_key_up)
         self.current_keys = set()
         self.listener.start()
@@ -100,6 +101,7 @@ class HotkeyManager:
     def on_key_down(self, key):
         print(f"down: {key}")
         self.current_keys.add(key)
+        self.key_flusher.add_key(key)
 
     def on_key_up(self, key):
         print(f"up: {key}")
@@ -130,6 +132,32 @@ class HotkeyManager:
             else:
                 normalized_keys.add(key)
         return normalized_keys
+
+
+class KeyFlusher:
+    def __init__(self):
+        self.buffer = []
+        self.lock = threading.Lock()
+        self.reset_timer()
+
+    def reset_timer(self):
+        # If there's an existing timer, cancel it
+        if hasattr(self, 'timer'):
+            self.timer.cancel()
+
+        # Create a new timer that will flush the buffer after 1 second
+        self.timer = threading.Timer(1, self.flush_buffer)
+        self.timer.start()
+
+    def add_key(self, key):
+        with self.lock:
+            self.buffer.append(key)
+            self.reset_timer()
+
+    def flush_buffer(self):
+        with self.lock:
+            self.buffer.clear()
+            print("Buffer flushed!")
 
 
 if __name__ == "__main__":
