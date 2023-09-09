@@ -11,10 +11,8 @@ PORT = 65432
 BUFFER_SIZE = 1024
 
 MACROS = {
-    frozenset([keyboard.Key.ctrl, keyboard.Key.alt, keyboard.KeyCode.from_char('r')]): {'type': 'PRESS_KEY',
-                                                                                        'action': 'right'},
-    frozenset([keyboard.Key.ctrl, keyboard.Key.alt, keyboard.KeyCode.from_char('t')]): {'type': 'TYPE_TEXT',
-                                                                                        'action': 'Hello World'}
+    frozenset(['ctrl', 'alt', keyboard.KeyCode.from_char('r')]): {'type': 'PRESS_KEY', 'action': 'right'},
+    frozenset(['ctrl', 'alt', keyboard.KeyCode.from_char('t')]): {'type': 'TYPE_TEXT', 'action': 'Hello World'}
 }
 
 
@@ -100,21 +98,17 @@ class HotkeyManager:
         self.listener.start()
 
     def on_key_down(self, key):
-        print(f"key down: {key}")
-        print(f"Macro keys: {MACROS.keys()}")
-        if any([key in combo for combo in MACROS.keys()]):
-            print(f"Adding to current_keys: {key}")
-            self.current_keys.add(key)
-            time.sleep(0.1)
-            self.on_activate()
+        self.current_keys.add(key)
 
     def on_key_up(self, key):
-        print(f"key up: {key}")
+        self.on_activate()
         self.current_keys.discard(key)
 
     def on_activate(self):
         print(f"Current keys: {self.current_keys}")
-        action = MACROS.get(frozenset(self.current_keys))
+        normalized_keys = self.normalize_keys(self.current_keys)
+        print(f"normalized: {normalized_keys}")
+        action = MACROS.get(frozenset(normalized_keys))
         print(f"action: {action}")
         if action:
             if action['type'] == 'PRESS_KEY':
@@ -123,6 +117,17 @@ class HotkeyManager:
             elif action['type'] == 'TYPE_TEXT':
                 print(f'Hotkey for typing text "{action["action"]}" activated')
                 self.conn_manager.send_command(f'TYPE_TEXT:{action["action"]}')
+
+    def normalize_keys(self, keys_set):
+        normalized_keys = set()
+        for key in keys_set:
+            if key in [keyboard.Key.ctrl_l, keyboard.Key.ctrl_r]:
+                normalized_keys.add('ctrl')
+            elif key in [keyboard.Key.alt_l, keyboard.Key.alt_r]:
+                normalized_keys.add('alt')
+            else:
+                normalized_keys.add(key)
+        return normalized_keys
 
 
 if __name__ == "__main__":
