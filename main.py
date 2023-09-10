@@ -28,13 +28,53 @@ BUFFER_SIZE = 4096
 AUTH_SUCCESS = "AUTH_SUCCESS"
 AUTH_FAILED = "AUTH_FAILED"
 
-MACROS = {
-    "ctrl_l+alt_l+r": ["KEYS:right"],
-    "ctrl_l+alt_l+l": ["KEYS:left"],
-    "ctrl_l+alt_l+f": ["KEYS:f8"],
-    "ctrl_l+alt_l+.": ["KEYS:ctrl_l+right"],
-    "ctrl_l+alt_l+,": ["KEYS:ctrl_l+left"]
-}
+
+# MACROS = {
+#     "ctrl_l+alt_l+r": ["KEYS:right"],
+#     "ctrl_l+alt_l+l": ["KEYS:left"],
+#     "ctrl_l+alt_l+f": ["KEYS:f8"],
+#     "ctrl_l+alt_l+.": ["KEYS:ctrl_l+right"],
+#     "ctrl_l+alt_l+/": ["KEYS:ctrl_l+left"]
+# }
+
+
+class MacroManager:
+    MACROS = {
+        "ctrl_l+alt_l+r": ["KEYS:right"],
+        "ctrl_l+alt_l+l": ["KEYS:left"],
+        "ctrl_l+alt_l+f": ["KEYS:f8"],
+        "ctrl_l+alt_l+.": ["KEYS:ctrl_l+right"],
+        "ctrl_l+alt_l+/": ["KEYS:ctrl_l+left"]
+    }
+
+    @staticmethod
+    def display_macros():
+        for key, value in MacroManager.MACROS.items():
+            print(f"{key}: {value}")
+
+    @staticmethod
+    def get_macros():
+        return MacroManager.MACROS
+
+    @staticmethod
+    def add_macro(hotkey, action):
+        MacroManager.MACROS[hotkey] = [action]
+
+    @staticmethod
+    def edit_macro(old_hotkey, new_hotkey, new_action):
+        if old_hotkey not in MacroManager.MACROS:
+            print("Original key combination not found!")
+            return
+        del MacroManager.MACROS[old_hotkey]
+        MacroManager.MACROS[new_hotkey] = [new_action]
+
+    @staticmethod
+    def delete_macro(hotkey):
+        if hotkey in MacroManager.MACROS:
+            del MacroManager.MACROS[hotkey]
+        else:
+            print("Key combination not found!")
+
 
 key_press_times = {}
 
@@ -69,12 +109,13 @@ class DatabaseManager:
 
     @staticmethod
     def load_macros_from_db():
-        global MACROS
-        logging.info(f"Current MACROS: {MACROS}")
+        # global MACROS
+        # logging.info(f"Current MACROS: {MACROS}")
         with DatabaseManager.get_db_connection() as c:
             for hotkey, action in c.execute('SELECT * FROM macros'):
                 logging.info(f"loading: {hotkey} with action: {action}")
-                MACROS[hotkey] = action.split(',')
+                MacroManager.add_macro(hotkey, action.split(','))
+                # MACROS[hotkey] = action.split(',')
 
     @staticmethod
     def sync_macros_to_db(received_macros):
@@ -92,6 +133,21 @@ class DatabaseManager:
                 c.execute(query, params)
             except sqlite3.Error as e:
                 logging.error(f"Database error: {e}")
+
+    @staticmethod
+    def add_macro_to_db(hotkey, action):
+        query = f'INSERT OR REPLACE INTO macros VALUES(?, ?)'
+        DatabaseManager.execute_db_query(query, (hotkey, action))
+
+    @staticmethod
+    def delete_macro_from_db(hotkey):
+        query = f'DELETE FROM macros WHERE hotkey = ?'
+        DatabaseManager.execute_db_query(query, (hotkey,))
+
+    @staticmethod
+    def edit_macro_in_db(existing_hotkey, new_hotkey, new_action):
+        DatabaseManager.delete_macro_from_db(existing_hotkey)
+        DatabaseManager.add_macro_to_db(new_hotkey, new_action)
 
 
 def on_key_press(key):
@@ -164,11 +220,11 @@ def main_master_loop(sock):
     while True:
         global is_macros_updated
         if is_macros_updated:
-            logging.info(f"macros updates, triggering sync_macros")
+            logging.info(f"macros updated, triggering sync_macros")
             sync_macros(sock)
             is_macros_updated = False
 
-        for hotkey, commands in MACROS.copy().items():
+        for hotkey, commands in MacroManager.get_macros().copy().items():
             if should_execute_macro(hotkey):
                 for command in commands:
                     process_and_send_command(command, sock)
@@ -186,8 +242,8 @@ def should_execute_macro(hotkey):
 
 
 def sync_macros(sock):
-    logging.info(f"Current macros to sync {MACROS}")
-    data = list(MACROS.items())
+    logging.info(f"Current macros to sync {MacroManager.get_macros()}")
+    data = list(MacroManager.get_macros().items())
     logging.info(f"data from macros: {data}")
     # Calculate the number of columns to insert (this assumes that all tuples in `data` have the same length)
     num_columns = len(data[0]) if data else 0
@@ -400,26 +456,21 @@ class App:
 
     def load_macros_into_listbox(self):
         self.macro_listbox.delete(0, 'end')  # clear existing items
-        logging.info(f"loading macros into list box: {MACROS}")
-        for hotkey, actions in MACROS.items():
+        logging.info(f"loading macros into list box: {MacroManager.get_macros()}")
+        for hotkey, actions in MacroManager.get_macros().items():
             logging.info(f"hotkey: {hotkey} actions: {actions}")
             self.macro_listbox.insert('end', f"Hotkey: {hotkey}, Action: {actions[0]}")
-
-    def update_db_and_dict(self, hotkey, action):
-        logging.info(f"Updating DB and Dict with hotkey:{hotkey} action:{action}")
-        with DatabaseManager.get_db_connection() as c:
-            c.execute("INSERT OR REPLACE INTO macros VALUES (?, ?)", (hotkey, action))
-        MACROS[hotkey] = [action]
-        global is_macros_updated
-        is_macros_updated = True
-        self.load_macros_into_listbox()
 
     def add_macro(self):
         hotkey = simpledialog.askstring("Input", "Enter the hotkey:")
         action = simpledialog.askstring("Input", "Enter the action:") if hotkey else None
         if hotkey and action:
             logging.info(f"Adding Macro: hotkey:{hotkey} action:{action}")
-            self.update_db_and_dict(hotkey, action)
+            DatabaseManager.add_macro_to_db(hotkey, action)
+            global is_macros_updated
+            is_macros_updated = True
+            MacroManager.add_macro(hotkey, action)
+            self.load_macros_into_listbox()
 
     def edit_macro(self):
         selected = self.macro_listbox.curselection()
@@ -441,15 +492,12 @@ class App:
         if new_hotkey and new_action:
             logging.info(f"edit_macro Updating DB: new hotkey{new_hotkey}  new action:{new_action}")
             # Update database
-            with DatabaseManager.get_db_connection() as c:
-                c.execute("DELETE FROM macros WHERE hotkey = ?", (existing_hotkey,))
-                c.execute("INSERT INTO macros (hotkey, action) VALUES (?, ?)", (new_hotkey, new_action))
+            DatabaseManager.edit_macro_in_db(existing_hotkey, new_hotkey, new_action)
 
             # Update MACROS dictionary
-            logging.info(f"edit_macro: old MACROS: {MACROS}")
-            del MACROS[existing_hotkey]
-            MACROS[new_hotkey] = [new_action]
-            logging.info(f"edit_macro: new MACROS: {MACROS}")
+            logging.info(f"edit_macro: old MACROS: {MacroManager.get_macros()}")
+            MacroManager.edit_macro(existing_hotkey, new_hotkey, new_action)
+            logging.info(f"edit_macro: new MACROS: {MacroManager.get_macros()}")
             global is_macros_updated
             is_macros_updated = True
             self.load_macros_into_listbox()
@@ -469,19 +517,16 @@ class App:
         # Extracting the actual hotkey from the selected string
         hotkey = selected_string.split(",")[0].split(":")[1].strip()
 
-        # Delete from database
-        logging.info(f"delete_macro: looking for DB hotkey: {hotkey}")
-        with DatabaseManager.get_db_connection() as c:
-            c.execute("DELETE FROM macros WHERE hotkey = ?", (hotkey,))
-
         # Delete from MACROS dictionary
         try:
-            global MACROS
-            MACROS = {}
             DatabaseManager.load_macros_from_db()
-            logging.info(f"old MACROS: {MACROS}")
-            del MACROS[hotkey]
-            logging.info(f"new MACROS:{MACROS}")
+            logging.info(f"old MACROS: {MacroManager.get_macros()}")
+            MacroManager.delete_macro(hotkey)
+            logging.info(f"new MACROS:{MacroManager.get_macros()}")
+            # Delete from database
+            logging.info(f"delete_macro: looking for DB hotkey: {hotkey}")
+            DatabaseManager.delete_macro_from_db(hotkey)
+            DatabaseManager.load_macros_from_db()
             global is_macros_updated
             is_macros_updated = True
 
