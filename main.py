@@ -189,8 +189,6 @@ def process_and_send_command(user_input, sock):
         logging.error(f"Error processing command for input {user_input}: {e}")
 
 
-
-
 def hash_challenge(challenge):
     return hashlib.sha256((challenge + SHARED_SECRET).encode()).hexdigest()
 
