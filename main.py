@@ -40,7 +40,7 @@ AUTH_FAILED = "AUTH_FAILED"
 
 class MacroManager:
     MACROS = {
-        "ctrl_l+alt_l+r": ["KEYS:right"],
+        "ctrl_l+alt_l+r": ["KEYS:right", "TEXT:Hello"],
         "ctrl_l+alt_l+l": ["KEYS:left"],
         "ctrl_l+alt_l+f": ["KEYS:f8"],
         "ctrl_l+alt_l+.": ["KEYS:ctrl_l+right"],
@@ -168,21 +168,27 @@ def keys_pressed_recently(keys, window=0.5):
 
 
 def process_and_send_command(user_input, sock):
-    if user_input.startswith("EXIT:"):
-        payload = {"type": "exit"}
-    elif user_input.startswith("TEXT:"):
-        text = user_input[len("TEXT:"):].strip()
-        payload = {"type": "text", "data": text}
-    elif user_input.startswith("KEYS:"):
-        keys = user_input[len("KEYS:"):].strip().split('+')
-        payload = {"type": "keys", "data": keys}
-    else:
-        logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
-        return
+    try:
+        for command in user_input:
+            if command.startswith("EXIT:"):
+                payload = {"type": "exit"}
+            elif command.startswith("TEXT:"):
+                text = command[len("TEXT:"):].strip()
+                payload = {"type": "text", "data": text}
+            elif command.startswith("KEYS:"):
+                keys = command[len("KEYS:"):].strip().split('+')
+                payload = {"type": "keys", "data": keys}
+            else:
+                logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
+                return
 
-    message = json.dumps(payload)
-    logging.info(f"Sending message: {message}")
-    sock.sendall(message.encode('utf-8'))
+            message = json.dumps(payload)
+            logging.info(f"Sending message: {message}")
+            sock.sendall(message.encode('utf-8'))
+    except Exception as e:
+        logging.error(f"Error processing command for input {user_input}: {e}")
+
+
 
 
 def hash_challenge(challenge):
@@ -201,7 +207,7 @@ def send_data_to_slave():
                 logging.error(f"Authentication failed")
                 return
             logging.info("Authentication successful")
-            sync_macros(sock)
+            # sync_macros(sock)
             main_master_loop(sock)
 
     except Exception as e:
@@ -221,7 +227,7 @@ def main_master_loop(sock):
         global is_macros_updated
         if is_macros_updated:
             logging.info(f"macros updated, triggering sync_macros")
-            sync_macros(sock)
+            # sync_macros(sock)
             is_macros_updated = False
 
         for hotkey, commands in MacroManager.get_macros().copy().items():
@@ -248,12 +254,17 @@ def sync_macros(sock):
     # Calculate the number of columns to insert (this assumes that all tuples in `data` have the same length)
     num_columns = len(data[0]) if data else 0
     logging.info(f"column count from MACROS: {num_columns}")
+    logging.info(f"data len: {len(data)}")
+    for item in data:
+        logging.info(f"data item: {item}")
 
     # Generate the appropriate number of placeholders
     placeholders = ', '.join('?' * num_columns)
     # Create the SQL query string
     query = f'INSERT OR REPLACE INTO macros VALUES ({placeholders})'
-    DatabaseManager.execute_db_query(query, data)
+    for item in data:
+        DatabaseManager.execute_db_query(query, item)
+    # DatabaseManager.execute_db_query(query, data)
     send_data = json.dumps({"type": "SYNC_MACROS", "data": MacroManager.get_macros()})
     logging.info(f"sending data: {send_data}")
     sock.sendall(send_data.encode('utf-8'))
