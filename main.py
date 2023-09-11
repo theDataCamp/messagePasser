@@ -13,6 +13,9 @@ from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox
 import threading
 import sqlite3
 
+from db_manager import MacroDBManager
+from macro_tree import MacroActionTree
+
 # Constants and shared functions
 
 # Added logging configuration
@@ -194,25 +197,25 @@ def hash_challenge(challenge):
 
 
 """
-Master Functions--------------------
+Client Functions--------------------
 """
 
 
-def send_data_to_slave():
+def send_data_to_server():
     try:
         with socket.create_connection((HOST, PORT)) as sock:
-            if not authenticate_with_slave(sock):
+            if not authenticate_server_with_client(sock):
                 logging.error(f"Authentication failed")
                 return
             logging.info("Authentication successful")
             # sync_macros(sock)
-            main_master_loop(sock)
+            main_client_loop(sock)
 
     except Exception as e:
         logging.error(f"Error in sending data to slave: {e}")
 
 
-def authenticate_with_slave(sock):
+def authenticate_server_with_client(sock):
     challenge = sock.recv(BUFFER_SIZE).decode()
     response = hash_challenge(challenge)
     sock.sendall(response.encode())
@@ -220,7 +223,7 @@ def authenticate_with_slave(sock):
     return auth_status == AUTH_SUCCESS
 
 
-def main_master_loop(sock):
+def main_client_loop(sock):
     while True:
         global is_macros_updated
         if is_macros_updated:
@@ -269,7 +272,7 @@ def sync_macros(sock):
 
 
 """
-Slave Functions--------------------
+Server Functions--------------------
 """
 
 
@@ -281,32 +284,32 @@ def listen_for_data():
             logging.info("Listening for input...")
 
             conn, addr = s.accept()
-            handle_slave_connection(conn, addr)
+            handle_server_connection(conn, addr)
     except Exception as e:
         logging.error(f"Error in listen_for_data: {e}")
 
 
-def handle_slave_connection(connection, addr):
+def handle_server_connection(connection, addr):
     with connection:
         logging.info(f'Connected by {addr}')
 
-        if authenticate_master(connection):
+        if authenticate_client_with_server(connection):
             logging.info("Authentication successful!")
             connection.sendall(AUTH_SUCCESS.encode())
-            main_slave_loop(connection)
+            main_server_loop(connection)
         else:
             logging.error("Authentication failed!")
             connection.sendall(AUTH_FAILED.encode())
 
 
-def authenticate_master(connection):
+def authenticate_client_with_server(connection):
     challenge = generate_challenge()
     connection.sendall(challenge.encode())
     response = connection.recv(BUFFER_SIZE).decode()
     return validate_response(response, challenge)
 
 
-def main_slave_loop(connection):
+def main_server_loop(connection):
     while True:
         data_received = connection.recv(BUFFER_SIZE).decode()
         if not data_received:
@@ -370,33 +373,46 @@ class App:
 
     def __init__(self, root):
         self.listener = None
+        # self.db_manager = MacroDBManager('sqlite:///./macrobs.db')
+        self.macro_tree = None
+        self.row_num = 0
         App.instance = self
         self.mode = StringVar(value="master")
 
-        Radiobutton(root, text="Master", variable=self.mode, value="master").grid(row=0, column=0, sticky="w")
-        Radiobutton(root, text="Slave", variable=self.mode, value="slave").grid(row=1, column=0, sticky="w")
+        Radiobutton(root, text="Master", variable=self.mode, value="master").grid(row=self.row_num, column=0,
+                                                                                  sticky="w")
+        self.row_num += 1
+        Radiobutton(root, text="Slave", variable=self.mode, value="slave").grid(row=self.row_num, column=0, sticky="w")
+        self.row_num += 1
 
-        Label(root, text="Slave IP Address:").grid(row=2, column=0, sticky="e")
+        Label(root, text="Slave IP Address:").grid(row=self.row_num, column=0, sticky="e")
         self.ip_entry = Entry(root)
-        self.ip_entry.grid(row=2, column=1)
+        self.ip_entry.grid(row=self.row_num, column=1)
         self.ip_entry.insert(0, HOST)
+        self.row_num += 1
 
         self.start_button = Button(root, text="Start", command=self.start)
-        self.start_button.grid(row=3, column=0, columnspan=2)
+        self.start_button.grid(row=self.row_num, column=0, columnspan=2)
+        self.row_num += 1
 
         self.stop_button = Button(root, text="Stop", state="disabled", command=self.stop)
-        self.stop_button.grid(row=4, column=0, columnspan=2)
+        self.stop_button.grid(row=self.row_num, column=0, columnspan=2)
+        self.row_num += 1
 
         # Create vertical and horizontal Scrollbars
         self.v_scrollbar = Scrollbar(root, orient='vertical')
-        self.v_scrollbar.grid(row=5, column=2, sticky='ns')
+        self.v_scrollbar.grid(row=self.row_num, column=2, sticky='ns')
 
         self.h_scrollbar = Scrollbar(root, orient='horizontal')
-        self.h_scrollbar.grid(row=6, column=0, columnspan=2, sticky='ew')
-
+        self.h_scrollbar.grid(row=self.row_num + 1, column=0, columnspan=2, sticky='ew')
         # Create a Listbox and add it to the grid layout
         self.macro_listbox = Listbox(root, yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
-        self.macro_listbox.grid(row=5, column=0, columnspan=2, sticky="nsew")
+        self.macro_listbox.grid(row=self.row_num - 1, column=0, columnspan=2, sticky="nsew")
+        self.row_num += 2
+
+        # self.macro_tree = MacroActionTree(root, self.row_num)
+        # self.macro_tree.tree.grid(row=self.row_num, column=0, columnspan=2, sticky="nsew")
+        # self.row_num = self.macro_tree.last_used_row + 1
 
         # Configure the vertical Scrollbar
         self.v_scrollbar.config(command=self.macro_listbox.yview)
@@ -409,13 +425,13 @@ class App:
 
         # Add/Edit/Delete buttons for the macros
         self.add_button = Button(root, text="Add Macro", command=self.add_macro)
-        self.add_button.grid(row=7, column=0)
+        self.add_button.grid(row=self.row_num, column=0)
 
         self.edit_button = Button(root, text="Edit Macro", command=self.edit_macro)
-        self.edit_button.grid(row=7, column=1)
+        self.edit_button.grid(row=self.row_num, column=1)
 
         self.delete_button = Button(root, text="Delete Macro", command=self.delete_macro)
-        self.delete_button.grid(row=7, column=2)
+        self.delete_button.grid(row=self.row_num, column=2)
 
         self.running = False
         self.current_thread = None
@@ -424,18 +440,18 @@ class App:
         global HOST
         HOST = self.ip_entry.get()
         if self.mode.get() == "master":
-            self.start_master()
+            self.start_client()
         else:
-            self.start_slave()
+            self.start_server()
 
-    def start_master(self):
+    def start_client(self):
         if self.running:
             return
         try:
             self.listener = keyboard.Listener(on_press=on_key_press)
             self.listener.start()
 
-            self.current_thread = threading.Thread(target=send_data_to_slave)
+            self.current_thread = threading.Thread(target=send_data_to_server)
             self.current_thread.start()
             self.running = True
             self.start_button.config(state="disabled")
@@ -443,7 +459,7 @@ class App:
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
-    def start_slave(self):
+    def start_server(self):
         if self.running:
             return
         try:
