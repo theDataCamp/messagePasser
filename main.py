@@ -103,9 +103,9 @@ class DatabaseManager:
 
             # If the table is empty, populate it with default macros
             if count == 0:
-                logging.info(f"Count is 0, loading the following macros from script: {MACROS}")
+                logging.info(f"Count is 0, loading the following macros from script: {MacroManager.get_macros()}")
                 c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
-                              [(hotkey, ','.join(action)) for hotkey, action in MACROS.items()])
+                              [(hotkey, ','.join(action)) for hotkey, action in MacroManager.get_macros().items()])
 
     @staticmethod
     def load_macros_from_db():
@@ -254,7 +254,7 @@ def sync_macros(sock):
     # Create the SQL query string
     query = f'INSERT OR REPLACE INTO macros VALUES ({placeholders})'
     DatabaseManager.execute_db_query(query, data)
-    send_data = json.dumps({"type": "SYNC_MACROS", "data": MACROS})
+    send_data = json.dumps({"type": "SYNC_MACROS", "data": MacroManager.get_macros()})
     logging.info(f"sending data: {send_data}")
     sock.sendall(send_data.encode('utf-8'))
 
