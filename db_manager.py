@@ -1,3 +1,4 @@
+import json
 import logging
 
 from sqlalchemy import create_engine, Column, String
@@ -22,7 +23,8 @@ class MacroDBManager:
     def add_macro(self, hotkey, actions):
         logging.info(f"Adding: {hotkey} with actions: {actions}")
         session = self.Session()
-        new_macro = Macro(hotkey=hotkey, actions=actions)
+        serialized_actions = json.dumps(actions)
+        new_macro = Macro(hotkey=hotkey, actions=serialized_actions)
         session.add(new_macro)
         session.commit()
         session.close()
@@ -40,12 +42,26 @@ class MacroDBManager:
         if macro:
             logging.info(f"found old macro, beginning update")
             macro.hotkey = new_hotkey
-            macro.actions = new_actions
+            macro.actions = json.dumps(new_actions)
             session.commit()
         session.close()
 
     def get_all_macros(self):
         session = self.Session()
         macros = session.query(Macro).all()
+        result = []
+        for macro in macros:
+            result.append({
+                'hotkey': macro.hotkey,
+                'actions': json.loads(macro.actions)
+            })
         session.close()
-        return macros
+        return result
+
+    def get_macro(self, hotkey):
+        session = self.Session()
+        macro = session.query(Macro).filter_by(hotkey=hotkey).first()
+        if macro:
+            macro.actions = json.loads(macro.actions)
+        session.close()
+        return macro

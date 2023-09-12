@@ -18,8 +18,8 @@ class MacroActionTree:
         self.tree = ttk.Treeview(self.container, columns=("Macros", "Actions"), show="headings")
         self.tree.heading("Macros", text="Macros")
         self.tree.heading("Actions", text="Actions")
-        self.tree.column("Macros", width=150)
-        self.tree.column("Actions", width=200)
+        self.tree.column("Macros", width=200)
+        self.tree.column("Actions", width=400)
 
         # Vertical Scrollbar
         self.vsb = ttk.Scrollbar(self.container, orient="vertical", command=self.tree.yview)
@@ -30,12 +30,13 @@ class MacroActionTree:
         self.tree.configure(xscrollcommand=self.hsb.set)
 
         # Use grid for geometry management
-        self.tree.grid(row=0, column=0, sticky='nsew')
-        self.vsb.grid(row=0, column=1, sticky='ns')
-        self.hsb.grid(row=1, column=0, sticky='ew')
+        self.tree.grid(row=self.last_used_row, column=0, sticky='nsew')
+        self.vsb.grid(row=self.last_used_row, column=1, sticky='ns')
+        self.last_used_row += 1
+        self.hsb.grid(row=self.last_used_row, column=0, sticky='ew')
 
         # Configure the container's rows and columns to adjust properly
-        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_rowconfigure(row_num, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
     def insert(self, macro, action):

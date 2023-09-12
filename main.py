@@ -79,6 +79,11 @@ class MacroManager:
             print("Key combination not found!")
 
 
+    @staticmethod
+    def add_actions(hotkey, actions):
+        MacroManager.MACROS[hotkey] = actions
+
+
 key_press_times = {}
 
 
@@ -368,12 +373,17 @@ def handle_mouse_move_relative(payload):
 
 # Tkinter app
 
+def create_actions_from_string(action):
+    actions = [item.strip() for item in action.split(',')]
+    return actions
+
+
 class App:
     instance = None
 
     def __init__(self, root):
         self.listener = None
-        # self.db_manager = MacroDBManager('sqlite:///./macrobs.db')
+        self.db_manager = MacroDBManager('sqlite:///./macrobs.db')
         self.macro_tree = None
         self.row_num = 0
         App.instance = self
@@ -401,18 +411,18 @@ class App:
 
         # Create vertical and horizontal Scrollbars
         self.v_scrollbar = Scrollbar(root, orient='vertical')
-        self.v_scrollbar.grid(row=self.row_num, column=2, sticky='ns')
+        # self.v_scrollbar.grid(row=self.row_num, column=2, sticky='ns')
 
         self.h_scrollbar = Scrollbar(root, orient='horizontal')
-        self.h_scrollbar.grid(row=self.row_num + 1, column=0, columnspan=2, sticky='ew')
+        # self.h_scrollbar.grid(row=self.row_num + 1, column=0, columnspan=2, sticky='ew')
         # Create a Listbox and add it to the grid layout
         self.macro_listbox = Listbox(root, yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
-        self.macro_listbox.grid(row=self.row_num - 1, column=0, columnspan=2, sticky="nsew")
-        self.row_num += 2
+        # self.macro_listbox.grid(row=self.row_num - 1, column=0, columnspan=2, sticky="nsew")
+        # self.row_num += 2
 
-        # self.macro_tree = MacroActionTree(root, self.row_num)
-        # self.macro_tree.tree.grid(row=self.row_num, column=0, columnspan=2, sticky="nsew")
-        # self.row_num = self.macro_tree.last_used_row + 1
+        self.macro_tree = MacroActionTree(root, self.row_num)
+        self.macro_tree.tree.grid(row=self.row_num, column=0, columnspan=3, sticky="nsew")
+        self.row_num = self.macro_tree.last_used_row + 1
 
         # Configure the vertical Scrollbar
         self.v_scrollbar.config(command=self.macro_listbox.yview)
@@ -481,77 +491,106 @@ class App:
 
     def load_macros_into_listbox(self):
         self.macro_listbox.delete(0, 'end')  # clear existing items
+        self.macro_tree.clear_items()
         logging.info(f"loading macros into list box: {MacroManager.get_macros()}")
         for hotkey, actions in MacroManager.get_macros().items():
             logging.info(f"hotkey: {hotkey} actions: {actions}")
             self.macro_listbox.insert('end', f"Hotkey: {hotkey}, Action: {actions[0]}")
+            self.macro_tree.insert(hotkey, actions)
 
     def add_macro(self):
         hotkey = simpledialog.askstring("Input", "Enter the hotkey:")
         action = simpledialog.askstring("Input", "Enter the action:") if hotkey else None
+        actions = create_actions_from_string(action)
         if hotkey and action:
-            logging.info(f"Adding Macro: hotkey:{hotkey} action:{action}")
+            logging.info(f"Adding Macro: hotkey:{hotkey} action:{action} or actions: {actions}")
             DatabaseManager.add_macro_to_db(hotkey, action)
+            self.db_manager.add_macro(hotkey, actions)
             global is_macros_updated
             is_macros_updated = True
-            MacroManager.add_macro(hotkey, action)
+            MacroManager.add_actions(hotkey, actions)
+            # MacroManager.add_macro(hotkey, action)
             self.load_macros_into_listbox()
 
     def edit_macro(self):
-        selected = self.macro_listbox.curselection()
-        if not selected:
-            messagebox.showwarning("Warning", "No macro selected!")
+        macro, actions = self.macro_tree.get_selected()
+        if not macro and not actions:
+            messagebox.showwarning("Warning", "Please Select a Macro to edit")
             return
-        listbox_entry = self.macro_listbox.get(selected[0])
-
-        # Parsing hotkey and existing action from listbox entry
-        # Assuming the entry format is 'Hotkey: hotkey_value, Action: action_value'
-        hotkey_part, action_part = listbox_entry.split(", ")
-        existing_hotkey = hotkey_part.split(": ")[1]
-        existing_action = action_part.split(": ")[1]
-
-        # Asking for new hotkey and action
-        new_hotkey = simpledialog.askstring("Input", f"Edit the hotkey", initialvalue=existing_hotkey)
-        new_action = simpledialog.askstring("Input", f"Edit the action for {new_hotkey}", initialvalue=existing_action)
-
-        if new_hotkey and new_action:
-            logging.info(f"edit_macro Updating DB: new hotkey{new_hotkey}  new action:{new_action}")
-            # Update database
-            DatabaseManager.edit_macro_in_db(existing_hotkey, new_hotkey, new_action)
-
-            # Update MACROS dictionary
-            logging.info(f"edit_macro: old MACROS: {MacroManager.get_macros()}")
-            MacroManager.edit_macro(existing_hotkey, new_hotkey, new_action)
-            logging.info(f"edit_macro: new MACROS: {MacroManager.get_macros()}")
-            global is_macros_updated
-            is_macros_updated = True
-            self.load_macros_into_listbox()
+        new_macro = simpledialog.askstring("Edit", "Enter Macro:", initialvalue=macro)
+        if new_macro is not None:
+            new_action = simpledialog.askstring("Edit", "Enter actions (separated by ','", initialvalue=actions)
+            if new_action is not None:
+                self.macro_tree.edit_selected(new_macro, new_action)
+                DatabaseManager.edit_macro_in_db(macro, new_macro, new_action)
+                actions = create_actions_from_string(new_action)
+                self.db_manager.edit_macro(macro, new_macro, actions)
+                MacroManager.edit_macro(macro, new_macro, new_action)
+                global is_macros_updated
+                is_macros_updated = True
+                self.load_macros_into_listbox()
+        # selected = self.macro_listbox.curselection()
+        # if not selected:
+        #     messagebox.showwarning("Warning", "No macro selected!")
+        #     return
+        # listbox_entry = self.macro_listbox.get(selected[0])
+        #
+        # # Parsing hotkey and existing action from listbox entry
+        # # Assuming the entry format is 'Hotkey: hotkey_value, Action: action_value'
+        # hotkey_part, action_part = listbox_entry.split(", ")
+        # existing_hotkey = hotkey_part.split(": ")[1]
+        # existing_action = action_part.split(": ")[1]
+        #
+        # # Asking for new hotkey and action
+        # new_hotkey = simpledialog.askstring("Input", f"Edit the hotkey", initialvalue=existing_hotkey)
+        # new_action = simpledialog.askstring("Input", f"Edit the action for {new_hotkey}", initialvalue=existing_action)
+        #
+        # if new_hotkey and new_action:
+        #     logging.info(f"edit_macro Updating DB: new hotkey{new_hotkey}  new action:{new_action}")
+        #     # Update database
+        #     DatabaseManager.edit_macro_in_db(existing_hotkey, new_hotkey, new_action)
+        #
+        #     # Update MACROS dictionary
+        #     logging.info(f"edit_macro: old MACROS: {MacroManager.get_macros()}")
+        #     MacroManager.edit_macro(existing_hotkey, new_hotkey, new_action)
+        #     logging.info(f"edit_macro: new MACROS: {MacroManager.get_macros()}")
+        #     global is_macros_updated
+        #     is_macros_updated = True
+        #     self.load_macros_into_listbox()
 
     def delete_macro(self):
-        selected = self.macro_listbox.curselection()
-        if not selected:
-            messagebox.showwarning("Warning", "No macro selected!")
+        macro, actions = self.macro_tree.get_selected()
+        if not macro and not actions:
+            messagebox.showwarning("Warning", "Please Select a Macro to delete")
             return
-
         confirm = messagebox.askyesno("Confirm", "Are you sure you want to delete this macro?")
         if not confirm:
             return
+
+        # DatabaseManager.load_macros_from_db()
+        # selected = self.macro_listbox.curselection()
+        # if not selected:
+        #     messagebox.showwarning("Warning", "No macro selected!")
+        #     return
+
         # Note that curselection returns a tuple, hence selected[0]
-        selected_string = self.macro_listbox.get(selected[0])
+        # selected_string = self.macro_listbox.get(selected[0])
 
         # Extracting the actual hotkey from the selected string
-        hotkey = selected_string.split(",")[0].split(":")[1].strip()
+        # hotkey = selected_string.split(",")[0].split(":")[1].strip()
 
         # Delete from MACROS dictionary
         try:
             DatabaseManager.load_macros_from_db()
             logging.info(f"old MACROS: {MacroManager.get_macros()}")
-            MacroManager.delete_macro(hotkey)
+            MacroManager.delete_macro(macro)
             logging.info(f"new MACROS:{MacroManager.get_macros()}")
             # Delete from database
-            logging.info(f"delete_macro: looking for DB hotkey: {hotkey}")
-            DatabaseManager.delete_macro_from_db(hotkey)
+            logging.info(f"delete_macro: looking for DB hotkey: {macro}")
+            DatabaseManager.delete_macro_from_db(macro)
             DatabaseManager.load_macros_from_db()
+            self.db_manager.delete_macro(macro)
+            self.macro_tree.delete_selected()
             global is_macros_updated
             is_macros_updated = True
 
