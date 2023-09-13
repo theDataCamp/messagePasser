@@ -74,23 +74,23 @@ class Client:
 
     def process_and_send_command(self, user_input):
         try:
-            logging.info(f"Processing commands: {user_input}")
-            for command in user_input:
-                if command.startswith("EXIT:"):
-                    payload = {"type": "exit"}
-                elif command.startswith("TEXT:"):
-                    text = command[len("TEXT:"):].strip()
-                    payload = {"type": "text", "data": text}
-                elif command.startswith("KEYS:"):
-                    keys = command[len("KEYS:"):].strip().split('+')
-                    payload = {"type": "keys", "data": keys}
-                else:
-                    logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
-                    return
+            logging.info(f"Processing command: {user_input}")
 
-                message = json.dumps(payload)
-                logging.info(f"Sending message: {message}")
-                self.client_socket.sendall(message.encode('utf-8'))
+            if user_input.startswith("EXIT:"):
+                payload = {"type": "exit"}
+            elif user_input.startswith("TEXT:"):
+                text = user_input[len("TEXT:"):].strip()
+                payload = {"type": "text", "data": text}
+            elif user_input.startswith("KEYS:"):
+                keys = user_input[len("KEYS:"):].strip().split('+')
+                payload = {"type": "keys", "data": keys}
+            else:
+                logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
+                return
+
+            message = json.dumps(payload)
+            logging.info(f"Sending message: {message}")
+            self.client_socket.sendall(message.encode('utf-8'))
         except Exception as e:
             logging.error(f"Error processing command for input {user_input}: {e}")
 
