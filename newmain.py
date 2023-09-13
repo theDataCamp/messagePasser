@@ -13,7 +13,8 @@ import threading
 from db_manager import MacroDBManager
 from macro_manager import MacroManager
 from macro_tree import MacroActionTree
-from socket_client import Client
+from socket_client import Client, hash_challenge
+from constants_manager import constants
 
 # Constants and shared functions
 
@@ -21,62 +22,14 @@ from socket_client import Client
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
                                                '[%(module)s.%(funcName)s] %(message)s')
 
-HOST = '10.0.0.221'
-PORT = 65432
-SHARED_SECRET = "JosueAlemanIsASecretPassword"
-DB_NAME = "macros.db"
-BUFFER_SIZE = 4096
-AUTH_SUCCESS = "AUTH_SUCCESS"
-AUTH_FAILED = "AUTH_FAILED"
+HOST = constants.get('HOST')
+PORT = constants.get('PORT')
+SHARED_SECRET = constants.get('SHARED_SECRET')
+DB_NAME = constants.get('DB_NAME')
+BUFFER_SIZE = constants.get('BUFFER_SIZE')
+AUTH_SUCCESS = constants.get('AUTH_SUCCESS')
+AUTH_FAILED = constants.get('AUTH_FAILED')
 
-
-
-
-
-key_press_times = {}
-
-
-def on_key_press(key):
-    try:
-        key_name = key.char  # For regular keys
-        logging.info(f"it is a char (regular keys)")
-
-    except AttributeError:
-        key_name = key.name  # For special keys
-        logging.info(f"it is a name (special key)")
-
-    logging.info(f"Key pressed: {key_name}")
-    key_press_times[key_name] = time.time()
-
-
-def keys_pressed_recently(keys, window=0.5):
-    return all(key_press_times.get(key, 0) >= time.time() - window for key in keys)
-
-
-def process_and_send_command(user_input, sock):
-    try:
-        for command in user_input:
-            if command.startswith("EXIT:"):
-                payload = {"type": "exit"}
-            elif command.startswith("TEXT:"):
-                text = command[len("TEXT:"):].strip()
-                payload = {"type": "text", "data": text}
-            elif command.startswith("KEYS:"):
-                keys = command[len("KEYS:"):].strip().split('+')
-                payload = {"type": "keys", "data": keys}
-            else:
-                logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
-                return
-
-            message = json.dumps(payload)
-            logging.info(f"Sending message: {message}")
-            sock.sendall(message.encode('utf-8'))
-    except Exception as e:
-        logging.error(f"Error processing command for input {user_input}: {e}")
-
-
-def hash_challenge(challenge):
-    return hashlib.sha256((challenge + SHARED_SECRET).encode()).hexdigest()
 
 
 """

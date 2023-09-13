@@ -7,11 +7,12 @@ import time
 from pynput import keyboard
 
 from macro_manager import MacroManager
+from constants_manager import constants
 
-BUFFER_SIZE = 4096
-AUTH_SUCCESS = "AUTH_SUCCESS"
-AUTH_FAILED = "AUTH_FAILED"
-SHARED_SECRET = "JosueAlemanIsASecretPassword"
+BUFFER_SIZE = constants.get('BUFFER_SIZE')
+AUTH_SUCCESS = constants.get('AUTH_SUCCESS')
+AUTH_FAILED = constants.get('AUTH_FAILED')
+SHARED_SECRET = constants.get('SHARED_SECRET')
 key_press_times = {}
 
 
@@ -26,6 +27,14 @@ def on_key_press(key):
 
     logging.info(f"Key pressed: {key_name}")
     key_press_times[key_name] = time.time()
+
+
+def keys_pressed_recently(keys, window=0.5):
+    return all(key_press_times.get(key, 0) >= time.time() - window for key in keys)
+
+
+def hash_challenge(challenge):
+    return hashlib.sha256((challenge + SHARED_SECRET).encode()).hexdigest()
 
 
 class Client:
@@ -65,7 +74,7 @@ class Client:
 
     def should_execute_macro(self, hotkey):
         required_keys = set(hotkey.split('+'))
-        if self.keys_pressed_recently(required_keys):
+        if keys_pressed_recently(required_keys):
             for key in required_keys:
                 key_press_times.pop(key, None)
             logging.info(f"Will execute macro: {hotkey}")
@@ -94,18 +103,12 @@ class Client:
         except Exception as e:
             logging.error(f"Error processing command for input {user_input}: {e}")
 
-    def keys_pressed_recently(self, keys, window=0.5):
-        return all(key_press_times.get(key, 0) >= time.time() - window for key in keys)
-
     def authenticate_server_with_client(self):
         challenge = self.client_socket.recv(BUFFER_SIZE).decode()
-        response = self.hash_challenge(challenge)
+        response = hash_challenge(challenge)
         self.client_socket.sendall(response.encode())
         auth_status = self.client_socket.recv(BUFFER_SIZE).decode()
         return auth_status == AUTH_SUCCESS
-
-    def hash_challenge(self, challenge):
-        return hashlib.sha256((challenge + SHARED_SECRET).encode()).hexdigest()
 
     def add_macro(self, hotkey, actions):
         # Update local DB

@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(t
 
 HOST = '10.0.0.221'
 PORT = 65432
-SHARED_SECRET = "JosueAlemanIsASecretPassword"
+SHARED_SECRET = "ThisIsATestSecretPassword"
 DB_NAME = "macros.db"
 is_macros_updated = False
 BUFFER_SIZE = 4096
