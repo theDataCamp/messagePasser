@@ -2,19 +2,18 @@ import socket
 import logging
 import json
 import hashlib
+import sys
 import time
 import random
-from contextlib import contextmanager
-from tkinter.ttk import Scrollbar, Combobox
 
-from pynput import keyboard
+
 import pyautogui
 from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox, simpledialog, Listbox, Menu, Toplevel
 import threading
-import sqlite3
-
 from db_manager import MacroDBManager
+from macro_manager import MacroManager
 from macro_tree import MacroActionTree
+from socket_client import Client
 
 # Constants and shared functions
 
@@ -26,136 +25,15 @@ HOST = '10.0.0.221'
 PORT = 65432
 SHARED_SECRET = "JosueAlemanIsASecretPassword"
 DB_NAME = "macros.db"
-is_macros_updated = False
 BUFFER_SIZE = 4096
 AUTH_SUCCESS = "AUTH_SUCCESS"
 AUTH_FAILED = "AUTH_FAILED"
 
 
-# MACROS = {
-#     "ctrl_l+alt_l+r": ["KEYS:right"],
-#     "ctrl_l+alt_l+l": ["KEYS:left"],
-#     "ctrl_l+alt_l+f": ["KEYS:f8"],
-#     "ctrl_l+alt_l+.": ["KEYS:ctrl_l+right"],
-#     "ctrl_l+alt_l+/": ["KEYS:ctrl_l+left"]
-# }
 
-
-class MacroManager:
-    MACROS = {
-        "ctrl_l+alt_l+r": ["KEYS:right", "TEXT:Hello"],
-        "ctrl_l+alt_l+l": ["KEYS:left"],
-        "ctrl_l+alt_l+f": ["KEYS:f8"],
-        "ctrl_l+alt_l+.": ["KEYS:ctrl_l+right"],
-        "ctrl_l+alt_l+/": ["KEYS:ctrl_l+left"]
-    }
-
-    @staticmethod
-    def display_macros():
-        for key, value in MacroManager.MACROS.items():
-            print(f"{key}: {value}")
-
-    @staticmethod
-    def get_macros():
-        return MacroManager.MACROS
-
-    @staticmethod
-    def add_macro(hotkey, action):
-        MacroManager.MACROS[hotkey] = [action]
-
-    @staticmethod
-    def edit_macro(old_hotkey, new_hotkey, new_action):
-        if old_hotkey not in MacroManager.MACROS:
-            print("Original key combination not found!")
-            return
-        del MacroManager.MACROS[old_hotkey]
-        MacroManager.MACROS[new_hotkey] = [new_action]
-
-    @staticmethod
-    def delete_macro(hotkey):
-        if hotkey in MacroManager.MACROS:
-            del MacroManager.MACROS[hotkey]
-        else:
-            print("Key combination not found!")
-
-
-    @staticmethod
-    def add_actions(hotkey, actions):
-        MacroManager.MACROS[hotkey] = actions
 
 
 key_press_times = {}
-
-
-class DatabaseManager:
-    @staticmethod
-    @contextmanager
-    def get_db_connection():
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        try:
-            yield c
-        finally:
-            conn.commit()
-            conn.close()
-
-    @staticmethod
-    def initialize_db():
-        with DatabaseManager.get_db_connection() as c:
-            c.execute('CREATE TABLE IF NOT EXISTS macros(hotkey TEXT PRIMARY KEY, action TEXT)')
-
-            # Check if the table is empty
-            c.execute('SELECT COUNT(*) FROM macros')
-            count = c.fetchone()[0]
-            logging.info(f"Checking to see if macros table is empty, has a count of {count}")
-
-            # If the table is empty, populate it with default macros
-            if count == 0:
-                logging.info(f"Count is 0, loading the following macros from script: {MacroManager.get_macros()}")
-                c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
-                              [(hotkey, ','.join(action)) for hotkey, action in MacroManager.get_macros().items()])
-
-    @staticmethod
-    def load_macros_from_db():
-        # global MACROS
-        # logging.info(f"Current MACROS: {MACROS}")
-        with DatabaseManager.get_db_connection() as c:
-            for hotkey, action in c.execute('SELECT * FROM macros'):
-                logging.info(f"loading: {hotkey} with action: {action}")
-                MacroManager.add_macro(hotkey, action.split(','))
-                # MACROS[hotkey] = action.split(',')
-
-    @staticmethod
-    def sync_macros_to_db(received_macros):
-        logging.info(f" Received macros to sync: {received_macros}")
-        with DatabaseManager.get_db_connection() as c:
-            c.execute('DELETE FROM macros')
-            c.executemany("INSERT OR REPLACE INTO macros VALUES (?, ?)",
-                          [(hotkey, ','.join(action)) for hotkey, action in received_macros.items()])
-
-    @staticmethod
-    def execute_db_query(query, params=()):
-        logging.info(f"Executing {query} with params: {params}")
-        with DatabaseManager.get_db_connection() as c:
-            try:
-                c.execute(query, params)
-            except sqlite3.Error as e:
-                logging.error(f"Database error: {e}")
-
-    @staticmethod
-    def add_macro_to_db(hotkey, action):
-        query = f'INSERT OR REPLACE INTO macros VALUES(?, ?)'
-        DatabaseManager.execute_db_query(query, (hotkey, action))
-
-    @staticmethod
-    def delete_macro_from_db(hotkey):
-        query = f'DELETE FROM macros WHERE hotkey = ?'
-        DatabaseManager.execute_db_query(query, (hotkey,))
-
-    @staticmethod
-    def edit_macro_in_db(existing_hotkey, new_hotkey, new_action):
-        DatabaseManager.delete_macro_from_db(existing_hotkey)
-        DatabaseManager.add_macro_to_db(new_hotkey, new_action)
 
 
 def on_key_press(key):
@@ -205,75 +83,6 @@ def hash_challenge(challenge):
 Client Functions--------------------
 """
 
-
-def send_data_to_server():
-    try:
-        with socket.create_connection((HOST, PORT)) as sock:
-            if not authenticate_server_with_client(sock):
-                logging.error(f"Authentication failed")
-                return
-            logging.info("Authentication successful")
-            # sync_macros(sock)
-            main_client_loop(sock)
-
-    except Exception as e:
-        logging.error(f"Error in sending data to slave: {e}")
-
-
-def authenticate_server_with_client(sock):
-    challenge = sock.recv(BUFFER_SIZE).decode()
-    response = hash_challenge(challenge)
-    sock.sendall(response.encode())
-    auth_status = sock.recv(BUFFER_SIZE).decode()
-    return auth_status == AUTH_SUCCESS
-
-
-def main_client_loop(sock):
-    while True:
-        global is_macros_updated
-        if is_macros_updated:
-            logging.info(f"macros updated, triggering sync_macros")
-            # sync_macros(sock)
-            is_macros_updated = False
-
-        for hotkey, commands in MacroManager.get_macros().copy().items():
-            if should_execute_macro(hotkey):
-                for command in commands:
-                    process_and_send_command(command, sock)
-
-                time.sleep(0.5)  # Delay to avoid rapid firing
-
-
-def should_execute_macro(hotkey):
-    required_keys = set(hotkey.split('+'))
-    if keys_pressed_recently(required_keys):
-        for key in required_keys:
-            key_press_times.pop(key, None)
-        return True
-    return False
-
-
-def sync_macros(sock):
-    logging.info(f"Current macros to sync {MacroManager.get_macros()}")
-    data = list(MacroManager.get_macros().items())
-    logging.info(f"data from macros: {data}")
-    # Calculate the number of columns to insert (this assumes that all tuples in `data` have the same length)
-    num_columns = len(data[0]) if data else 0
-    logging.info(f"column count from MACROS: {num_columns}")
-    logging.info(f"data len: {len(data)}")
-    for item in data:
-        logging.info(f"data item: {item}")
-
-    # Generate the appropriate number of placeholders
-    placeholders = ', '.join('?' * num_columns)
-    # Create the SQL query string
-    query = f'INSERT OR REPLACE INTO macros VALUES ({placeholders})'
-    for item in data:
-        DatabaseManager.execute_db_query(query, item)
-    # DatabaseManager.execute_db_query(query, data)
-    send_data = json.dumps({"type": "SYNC_MACROS", "data": MacroManager.get_macros()})
-    logging.info(f"sending data: {send_data}")
-    sock.sendall(send_data.encode('utf-8'))
 
 
 """
@@ -337,7 +146,7 @@ def process_received_payload(data_received, connection):
 
     payload_type = payload.get("type")
     if payload_type == "SYNC_MACROS":
-        handle_sync_macros(payload)
+        logging.info("Sync Macros requested")
     elif payload_type == "exit":
         logging.info("Exiting...")
         connection.close()
@@ -351,14 +160,6 @@ def process_received_payload(data_received, connection):
         handle_mouse_move_relative(payload)
     else:
         logging.warning(f"Unknown payload type: {payload_type}")
-
-
-def handle_sync_macros(payload):
-    received_macros = payload["data"]
-    DatabaseManager.sync_macros_to_db(received_macros)
-    DatabaseManager.load_macros_from_db()
-    if App.instance:
-        App.instance.load_macros_into_listbox()
 
 
 def handle_mouse_move(payload):
@@ -385,6 +186,7 @@ class App:
         self.listener = None
         self.db_manager = MacroDBManager('sqlite:///./macrobs.db')
         self.macro_tree = None
+        self.service_to_run = None
         self.row_num = 0
         App.instance = self
         self.mode = StringVar(value="master")
@@ -409,29 +211,9 @@ class App:
         self.stop_button.grid(row=self.row_num, column=0, columnspan=2)
         self.row_num += 1
 
-        # Create vertical and horizontal Scrollbars
-        self.v_scrollbar = Scrollbar(root, orient='vertical')
-        # self.v_scrollbar.grid(row=self.row_num, column=2, sticky='ns')
-
-        self.h_scrollbar = Scrollbar(root, orient='horizontal')
-        # self.h_scrollbar.grid(row=self.row_num + 1, column=0, columnspan=2, sticky='ew')
-        # Create a Listbox and add it to the grid layout
-        self.macro_listbox = Listbox(root, yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
-        # self.macro_listbox.grid(row=self.row_num - 1, column=0, columnspan=2, sticky="nsew")
-        # self.row_num += 2
-
         self.macro_tree = MacroActionTree(root, self.row_num)
-        self.macro_tree.tree.grid(row=self.row_num, column=0, columnspan=3, sticky="nsew")
+        self.macro_tree.tree.grid(row=self.row_num, column=0, columnspan=1, sticky="nsew")
         self.row_num = self.macro_tree.last_used_row + 1
-
-        # Configure the vertical Scrollbar
-        self.v_scrollbar.config(command=self.macro_listbox.yview)
-
-        # Configure the horizontal Scrollbar
-        self.h_scrollbar.config(command=self.macro_listbox.xview)
-
-        # Load the macros into the Listbox
-        self.load_macros_into_listbox()
 
         # Add/Edit/Delete buttons for the macros
         self.add_button = Button(root, text="Add Macro", command=self.add_macro)
@@ -445,6 +227,24 @@ class App:
 
         self.running = False
         self.current_thread = None
+        self.check_initial_db_for_macros()
+
+    def check_initial_db_for_macros(self):
+        check = self.db_manager.get_all_macros()
+        if isinstance(check, list) and not check:
+            logging.info("No Macros in DB... assigning defaults")
+            for hotkey, actions in MacroManager.get_macros().items():
+                logging.info(f"Adding hotkey:{hotkey} and actions: {actions} to db")
+                self.db_manager.add_macro(hotkey, actions)
+                self.macro_tree.insert(hotkey, actions)
+        elif isinstance(check, list):
+            logging.info("Macros already in DB, skipping assigning defaults, but loading tree")
+            for item in check:
+                self.macro_tree.insert(item['hotkey'], item['actions'])
+                MacroManager.add_actions(item['hotkey'], item['actions'])
+        else:
+            messagebox.showerror("Error!", "Macros DB seems to be corrupt, shutting down..")
+            sys.exit()
 
     def start(self):
         global HOST
@@ -458,10 +258,11 @@ class App:
         if self.running:
             return
         try:
-            self.listener = keyboard.Listener(on_press=on_key_press)
-            self.listener.start()
+            self.service_to_run = Client(HOST, PORT, self.db_manager)
+            # self.listener = keyboard.Listener(on_press=on_key_press)
+            # self.listener.start()
 
-            self.current_thread = threading.Thread(target=send_data_to_server)
+            self.current_thread = threading.Thread(target=self.service_to_run.start_client_services)
             self.current_thread.start()
             self.running = True
             self.start_button.config(state="disabled")
@@ -489,28 +290,15 @@ class App:
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
 
-    def load_macros_into_listbox(self):
-        self.macro_listbox.delete(0, 'end')  # clear existing items
-        self.macro_tree.clear_items()
-        logging.info(f"loading macros into list box: {MacroManager.get_macros()}")
-        for hotkey, actions in MacroManager.get_macros().items():
-            logging.info(f"hotkey: {hotkey} actions: {actions}")
-            self.macro_listbox.insert('end', f"Hotkey: {hotkey}, Action: {actions[0]}")
-            self.macro_tree.insert(hotkey, actions)
-
     def add_macro(self):
         hotkey = simpledialog.askstring("Input", "Enter the hotkey:")
         action = simpledialog.askstring("Input", "Enter the action:") if hotkey else None
         actions = create_actions_from_string(action)
         if hotkey and action:
             logging.info(f"Adding Macro: hotkey:{hotkey} action:{action} or actions: {actions}")
-            DatabaseManager.add_macro_to_db(hotkey, action)
+            self.macro_tree.insert(hotkey, actions)
             self.db_manager.add_macro(hotkey, actions)
-            global is_macros_updated
-            is_macros_updated = True
             MacroManager.add_actions(hotkey, actions)
-            # MacroManager.add_macro(hotkey, action)
-            self.load_macros_into_listbox()
 
     def edit_macro(self):
         macro, actions = self.macro_tree.get_selected()
@@ -521,14 +309,10 @@ class App:
         if new_macro is not None:
             new_action = simpledialog.askstring("Edit", "Enter actions (separated by ','", initialvalue=actions)
             if new_action is not None:
-                self.macro_tree.edit_selected(new_macro, new_action)
-                DatabaseManager.edit_macro_in_db(macro, new_macro, new_action)
                 actions = create_actions_from_string(new_action)
+                self.macro_tree.edit_selected(new_macro, new_action)
                 self.db_manager.edit_macro(macro, new_macro, actions)
                 MacroManager.edit_macro(macro, new_macro, new_action)
-                global is_macros_updated
-                is_macros_updated = True
-                self.load_macros_into_listbox()
 
     def delete_macro(self):
         macro, actions = self.macro_tree.get_selected()
@@ -539,28 +323,23 @@ class App:
         if not confirm:
             return
         try:
-            DatabaseManager.load_macros_from_db()
+            # DatabaseManager.load_macros_from_db()
             logging.info(f"old MACROS: {MacroManager.get_macros()}")
             MacroManager.delete_macro(macro)
             logging.info(f"new MACROS:{MacroManager.get_macros()}")
             # Delete from database
             logging.info(f"delete_macro: looking for DB hotkey: {macro}")
-            DatabaseManager.delete_macro_from_db(macro)
-            DatabaseManager.load_macros_from_db()
             self.db_manager.delete_macro(macro)
             self.macro_tree.delete_selected()
-            global is_macros_updated
-            is_macros_updated = True
 
         except KeyError:
             messagebox.showerror("Error", "Macro not found in dictionary.")
 
-        self.load_macros_into_listbox()
 
 
 if __name__ == "__main__":
-    DatabaseManager.initialize_db()
-    DatabaseManager.load_macros_from_db()
+    # DatabaseManager.initialize_db()
+    # DatabaseManager.load_macros_from_db()
     root = Tk()
     root.title("Master/Slave App")
     app = App(root)
