@@ -40,9 +40,12 @@ class Client:
         self.transaction_queue = []
 
     def start_client_services(self):
+        logging.info("Starting main client loop...")
         try:
             self.listener.start()
+            logging.info("Keyboard listener started")
             with socket.create_connection((self.host, self.port)) as self.client_socket:
+                logging.info("Client socket created successfully, authenticating...")
                 if not self.authenticate_server_with_client():
                     logging.error("Authentication failed :(")
                     return
@@ -53,12 +56,6 @@ class Client:
 
     def main_client_loop(self):
         while True:
-            global is_macros_updated
-            if is_macros_updated:
-                logging.info(f"macros updated, triggering sync_macros")
-                # sync_macros(sock)
-                is_macros_updated = False
-
             for hotkey, commands in MacroManager.get_macros().copy().items():
                 if self.should_execute_macro(hotkey):
                     for command in commands:
@@ -71,11 +68,13 @@ class Client:
         if self.keys_pressed_recently(required_keys):
             for key in required_keys:
                 key_press_times.pop(key, None)
+            logging.info(f"Will execute macro: {hotkey}")
             return True
         return False
 
     def process_and_send_command(self, user_input):
         try:
+            logging.info(f"Processing commands: {user_input}")
             for command in user_input:
                 if command.startswith("EXIT:"):
                     payload = {"type": "exit"}
