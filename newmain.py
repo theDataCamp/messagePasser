@@ -33,12 +33,6 @@ AUTH_FAILED = constants.get('AUTH_FAILED')
 
 
 """
-Client Functions--------------------
-"""
-
-
-
-"""
 Server Functions--------------------
 """
 
@@ -142,15 +136,15 @@ class App:
         self.service_to_run = None
         self.row_num = 0
         App.instance = self
-        self.mode = StringVar(value="master")
+        self.mode = StringVar(value="client")
 
-        Radiobutton(root, text="Master", variable=self.mode, value="master").grid(row=self.row_num, column=0,
+        Radiobutton(root, text="Client", variable=self.mode, value="client").grid(row=self.row_num, column=0,
                                                                                   sticky="w")
         self.row_num += 1
-        Radiobutton(root, text="Slave", variable=self.mode, value="slave").grid(row=self.row_num, column=0, sticky="w")
+        Radiobutton(root, text="Server", variable=self.mode, value="server").grid(row=self.row_num, column=0, sticky="w")
         self.row_num += 1
 
-        Label(root, text="Slave IP Address:").grid(row=self.row_num, column=0, sticky="e")
+        Label(root, text="Server IP Address:").grid(row=self.row_num, column=0, sticky="e")
         self.ip_entry = Entry(root)
         self.ip_entry.grid(row=self.row_num, column=1)
         self.ip_entry.insert(0, HOST)
@@ -202,7 +196,7 @@ class App:
     def start(self):
         global HOST
         HOST = self.ip_entry.get()
-        if self.mode.get() == "master":
+        if self.mode.get() == "client":
             self.start_client()
         else:
             self.start_server()
@@ -294,6 +288,6 @@ if __name__ == "__main__":
     # DatabaseManager.initialize_db()
     # DatabaseManager.load_macros_from_db()
     root = Tk()
-    root.title("Master/Slave App")
+    root.title("Client/Server App")
     app = App(root)
     root.mainloop()
