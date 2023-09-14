@@ -38,7 +38,6 @@ class MacroManager:
         else:
             print("Key combination not found!")
 
-
     @staticmethod
     def add_actions(hotkey, actions):
         logging.info(f"addint {hotkey}, {actions}")
