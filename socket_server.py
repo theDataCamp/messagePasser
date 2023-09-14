@@ -99,7 +99,7 @@ class Server:
         logging.info(f"Received type:{type(payload)} payload:{payload}")
         payload_type = payload.get("type")
         if payload_type == "SYNC_MACROS":
-            logging.info("Sync Macros requested")
+            logging.info(f"Sync Macros requested")
         elif payload_type == "exit":
             logging.info("Exiting...")
             client.close()
