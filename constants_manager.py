@@ -1,4 +1,5 @@
 # constants_manager.py
+import logging
 
 from sqlalchemy import create_engine, Column, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -63,6 +64,7 @@ class ConstantsManager:
 
     def __new__(cls, database_url=None):
         if not cls._instance:
+            logging.debug("This is the first creation of this instance")
             cls._instance = super(ConstantsManager, cls).__new__(cls)
             cls._instance._cache = {}
             if database_url:
@@ -74,21 +76,26 @@ class ConstantsManager:
 
     def _load_constants_into_cache(self):
         if not self._is_initialized:
+            logging.debug("First time being initialized")
             session = self.Session()
 
             # Fetch existing constants from the DB
+            logging.debug("Fetching constants from DB")
             constants_from_db = session.query(Constants).all()
             existing_constants = {const.name: json.loads(const.value) for const in constants_from_db}
 
             # Set defaults for any constants not in the DB
+            logging.debug("Set defaults for any constants not in the DB")
             for name, value in self.DEFAULT_CONSTANTS.items():
                 if name not in existing_constants:
+                    logging.debug(f"{name} was not in DB, adding it to DB now")
                     serialized_value = json.dumps(value)
                     const = Constants(name=name, value=serialized_value)
                     session.add(const)
                     existing_constants[name] = value
 
             # Update the cache
+            logging.debug("Updating constants cache with all existing constants (DB and default values)")
             self._cache = existing_constants
 
             session.commit()
@@ -101,6 +108,7 @@ class ConstantsManager:
             return cached_value
 
         # If the value wasn't in cache (for some reason), fetch from the database and deserialize
+        logging.info(f"{name} not found in cache, searching DB for it")
         session = self.Session()
         const = session.query(Constants).filter_by(name=name).first()
         session.close()
@@ -108,7 +116,7 @@ class ConstantsManager:
             deserialized_value = json.loads(const.value)
             self._cache[name] = deserialized_value  # Cache it for future retrievals
             return deserialized_value
-
+        logging.info(f"{name} was not found in cache or DB")
         return None  # If the constant wasn't found
 
     def set(self, name, value):
