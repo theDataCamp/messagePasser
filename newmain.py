@@ -1,5 +1,7 @@
 import json
 import logging
+
+
 import random
 import socket
 import sys
@@ -8,20 +10,21 @@ from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox
 
 import pyautogui
 
-from constants_manager import ConstantsManager
+# Added logging configuration
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
+                                               '[%(module)s.%(funcName)s] %(message)s')
 from db_manager import MacroDBManager
 from macro_manager import MacroManager
 from macro_tree import MacroActionTree
 from socket_client import Client, hash_challenge
+from constants_manager import ConstantsManager
+
 
 # Constants and shared functions
 # Initialize the ConstantsManager with a database URL
 database_url = "sqlite:///constants.db"  # Using SQLite for this example
 constants_manager = ConstantsManager(database_url)
 
-# Added logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
-                                               '[%(module)s.%(funcName)s] %(message)s')
 
 HOST = constants_manager.get('HOST')
 PORT = constants_manager.get('PORT')
@@ -129,6 +132,7 @@ class App:
     instance = None
 
     def __init__(self, root):
+        logging.info("Initializing app")
         self.listener = None
         self.db_manager = MacroDBManager('sqlite:///./macrobs.db')
         self.macro_tree = None
