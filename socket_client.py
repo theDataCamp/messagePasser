@@ -1,18 +1,23 @@
 import hashlib
+import json
 import logging
 import socket
-import json
 import time
 
 from pynput import keyboard
 
+from constants_manager import ConstantsManager
 from macro_manager import MacroManager
-from constants_manager import constants
 
-BUFFER_SIZE = constants.get('BUFFER_SIZE')
-AUTH_SUCCESS = constants.get('AUTH_SUCCESS')
-AUTH_FAILED = constants.get('AUTH_FAILED')
-SHARED_SECRET = constants.get('SHARED_SECRET')
+# Constants and shared functions
+# Initialize the ConstantsManager with a database URL
+database_url = "sqlite:///constants.db"  # Using SQLite for this example
+constants_manager = ConstantsManager(database_url)
+
+BUFFER_SIZE = constants_manager.get('BUFFER_SIZE')
+AUTH_SUCCESS = constants_manager.get('AUTH_SUCCESS')
+AUTH_FAILED = constants_manager.get('AUTH_FAILED')
+SHARED_SECRET = constants_manager.get('SHARED_SECRET')
 key_press_times = {}
 
 

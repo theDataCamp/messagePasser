@@ -1,34 +1,35 @@
-import socket
-import logging
 import json
-import hashlib
-import sys
-import time
+import logging
 import random
+import socket
+import sys
+import threading
+from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox, simpledialog
 
 import pyautogui
-from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox, simpledialog, Listbox, Menu, Toplevel
-import threading
+
+from constants_manager import ConstantsManager
 from db_manager import MacroDBManager
 from macro_manager import MacroManager
 from macro_tree import MacroActionTree
 from socket_client import Client, hash_challenge
-from constants_manager import constants
-from socket_server import Server
 
 # Constants and shared functions
+# Initialize the ConstantsManager with a database URL
+database_url = "sqlite:///constants.db"  # Using SQLite for this example
+constants_manager = ConstantsManager(database_url)
 
 # Added logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
                                                '[%(module)s.%(funcName)s] %(message)s')
 
-HOST = constants.get('HOST')
-PORT = constants.get('PORT')
-SHARED_SECRET = constants.get('SHARED_SECRET')
-DB_NAME = constants.get('DB_NAME')
-BUFFER_SIZE = constants.get('BUFFER_SIZE')
-AUTH_SUCCESS = constants.get('AUTH_SUCCESS')
-AUTH_FAILED = constants.get('AUTH_FAILED')
+HOST = constants_manager.get('HOST')
+PORT = constants_manager.get('PORT')
+SHARED_SECRET = constants_manager.get('SHARED_SECRET')
+DB_NAME = constants_manager.get('DB_NAME')
+BUFFER_SIZE = constants_manager.get('BUFFER_SIZE')
+AUTH_SUCCESS = constants_manager.get('AUTH_SUCCESS')
+AUTH_FAILED = constants_manager.get('AUTH_FAILED')
 
 """
 Server Functions--------------------

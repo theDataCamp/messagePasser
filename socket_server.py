@@ -4,14 +4,19 @@ import random
 import socket
 import json
 
-from constants_manager import constants
+from constants_manager import ConstantsManager
 
-HOST = constants.get('HOST')
-PORT = constants.get('PORT')
-SHARED_SECRET = constants.get('SHARED_SECRET')
-BUFFER_SIZE = constants.get('BUFFER_SIZE')
-AUTH_SUCCESS = constants.get('AUTH_SUCCESS')
-AUTH_FAILED = constants.get('AUTH_FAILED')
+# Constants and shared functions
+# Initialize the ConstantsManager with a database URL
+database_url = "sqlite:///constants.db"  # Using SQLite for this example
+constants_manager = ConstantsManager(database_url)
+
+HOST = constants_manager.get('HOST')
+PORT = constants_manager.get('PORT')
+SHARED_SECRET = constants_manager.get('SHARED_SECRET')
+BUFFER_SIZE = constants_manager.get('BUFFER_SIZE')
+AUTH_SUCCESS = constants_manager.get('AUTH_SUCCESS')
+AUTH_FAILED = constants_manager.get('AUTH_FAILED')
 
 
 def generate_challenge():
