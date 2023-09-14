@@ -24,11 +24,14 @@ AUTH_FAILED = constants_manager.get('AUTH_FAILED')
 def generate_challenge():
     return str(random.randint(100000, 999999))
 
+
 def validate_response(response, challenge):
     return response == hash_challenge(challenge)
 
+
 def hash_challenge(challenge):
     return hashlib.sha256((challenge + SHARED_SECRET).encode()).hexdigest()
+
 
 class Server:
     def __init__(self, host, port, db_manager):
