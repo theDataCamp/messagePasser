@@ -49,7 +49,7 @@ class Client:
         self.client_socket = None
         # self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # self.client_socket.connect((host, port))
-        self.db_manager = db_manager
+        # self.db_manager = db_manager
         self.listener = keyboard.Listener(on_press=on_key_press)
         self.transaction_queue = []
 
@@ -102,9 +102,7 @@ class Client:
                 logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
                 return
 
-            message = json.dumps(payload)
-            logging.info(f"Sending message: {message}")
-            self.client_socket.sendall(message.encode('utf-8'))
+            self.send_data(payload)
         except Exception as e:
             logging.error(f"Error processing command for input {user_input}: {e}")
 
@@ -115,40 +113,10 @@ class Client:
         auth_status = self.client_socket.recv(BUFFER_SIZE).decode()
         return auth_status == AUTH_SUCCESS
 
-    def add_macro(self, hotkey, actions):
-        # Update local DB
-        self.db_manager.add_macro(hotkey, actions)
-        # Send transaction to server
-        data = {
-            'action': 'add',
-            'hotkey': hotkey,
-            'actions': actions
-        }
-        self.send_data(data)
-
-    def edit_macro(self, hotkey, new_actions):
-        # Update local DB
-        self.db_manager.edit_macro(hotkey, new_actions)
-        # Send transaction to server
-        data = {
-            'action': 'edit',
-            'hotkey': hotkey,
-            'actions': new_actions
-        }
-        self.send_data(data)
-
-    def delete_macro(self, hotkey):
-        # Update local DB
-        self.db_manager.delete_macro(hotkey)
-        # Send transaction to server
-        data = {
-            'action': 'delete',
-            'hotkey': hotkey
-        }
-        self.send_data(data)
-
     def send_data(self, data):
-        self.client_socket.send(json.dumps(data).encode())
+        message = json.dumps(data)
+        logging.info(f"Sending message {message} to server")
+        self.client_socket.sendall(message.encode('utf-8'))
 
     def close(self):
         self.client_socket.close()

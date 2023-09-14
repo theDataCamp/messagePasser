@@ -242,6 +242,7 @@ class App:
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
 
+    # TODO: Finsih the add, edity and delete with the correct payload packing to send across
     def add_macro(self):
         hotkey = simpledialog.askstring("Input", "Enter the hotkey:")
         action = simpledialog.askstring("Input", "Enter the action:") if hotkey else None
@@ -251,6 +252,13 @@ class App:
             self.macro_tree.insert(hotkey, actions)
             self.db_manager.add_macro(hotkey, actions)
             MacroManager.add_actions(hotkey, actions)
+            if isinstance(self.service_to_run, Client) and self.service_to_run is not None:
+                logging.info("We have a Client service and its not empty so we will send the add across to server")
+                transactions = self.db_manager.get_all_transactions()
+                if transactions is not None:
+                    if transactions:
+                        logging.info(f"We have transactions to send: {transactions}")
+                # self.service_to_run.send_data()
 
     def edit_macro(self):
         macro, actions = self.macro_tree.get_selected()
