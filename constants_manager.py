@@ -120,13 +120,16 @@ class ConstantsManager:
         return None  # If the constant wasn't found
 
     def set(self, name, value):
+        logging.info(f"Adding {name}, {value} to constants")
         session = self.Session()
         serialized_value = json.dumps(value)  # Convert value to its JSON string representation
         const = session.query(Constants).filter_by(name=name).first()
         if not const:
+            logging.info(f"{name} did not exist, adding now")
             const = Constants(name=name)
             session.add(const)
         const.value = serialized_value
         self._cache[name] = value  # Cache the original type
+        logging.info(f"{name} cached and added to DB with val: {value}")
         session.commit()
         session.close()

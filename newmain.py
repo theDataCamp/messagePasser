@@ -10,6 +10,8 @@ from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox
 
 import pyautogui
 
+from socket_server import Server
+
 # Added logging configuration
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
                                                '[%(module)s.%(funcName)s] %(message)s')
@@ -198,8 +200,7 @@ class App:
             sys.exit()
 
     def start(self):
-        global HOST
-        HOST = self.ip_entry.get()
+        constants_manager.set('HOST', self.ip_entry.get())
         if self.mode.get() == "client":
             self.start_client()
         else:
@@ -224,8 +225,8 @@ class App:
             return
         try:
             # TODO: Finish this
-            # self.service_to_run = Server(HOST, PORT, self.db_manager)
-            self.current_thread = threading.Thread(target=listen_for_data)
+            self.service_to_run = Server(HOST, PORT, self.db_manager)
+            self.current_thread = threading.Thread(target=self.service_to_run.start)
             self.current_thread.start()
             self.running = True
             self.start_button.config(state="disabled")

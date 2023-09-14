@@ -4,6 +4,8 @@ import random
 import socket
 import json
 
+import pyautogui
+
 from constants_manager import ConstantsManager
 
 # Constants and shared functions
@@ -92,3 +94,27 @@ class Server:
     def process_received_payload(self, data_received, client):
         payload = json.loads(data_received)
         logging.info(f"Received type:{type(payload)} payload:{payload}")
+        payload_type = payload.get("type")
+        if payload_type == "SYNC_MACROS":
+            logging.info("Sync Macros requested")
+        elif payload_type == "exit":
+            logging.info("Exiting...")
+            client.close()
+        elif payload_type == "text":
+            pyautogui.write(payload["data"])
+        elif payload_type == "keys":
+            pyautogui.hotkey(*payload["data"])
+        elif payload_type == "mouse_move":
+            self.handle_mouse_move(payload)
+        elif payload_type == "mouse_move_rel":
+            self.handle_mouse_move_relative(payload)
+        else:
+            logging.warning(f"Unknown payload type: {payload_type}")
+
+    def handle_mouse_move(self, payload):
+        x, y = payload["data"]["x"], payload["data"]["y"]
+        pyautogui.moveTo(x, y)
+
+    def handle_mouse_move_relative(self, payload):
+        dx, dy = payload["data"]["dx"], payload["data"]["dy"]
+        pyautogui.move(dx, dy)
