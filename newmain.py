@@ -6,7 +6,6 @@ import sys
 import time
 import random
 
-
 import pyautogui
 from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox, simpledialog, Listbox, Menu, Toplevel
 import threading
@@ -15,6 +14,7 @@ from macro_manager import MacroManager
 from macro_tree import MacroActionTree
 from socket_client import Client, hash_challenge
 from constants_manager import constants
+from socket_server import Server
 
 # Constants and shared functions
 
@@ -29,8 +29,6 @@ DB_NAME = constants.get('DB_NAME')
 BUFFER_SIZE = constants.get('BUFFER_SIZE')
 AUTH_SUCCESS = constants.get('AUTH_SUCCESS')
 AUTH_FAILED = constants.get('AUTH_FAILED')
-
-
 
 """
 Server Functions--------------------
@@ -141,7 +139,8 @@ class App:
         Radiobutton(root, text="Client", variable=self.mode, value="client").grid(row=self.row_num, column=0,
                                                                                   sticky="w")
         self.row_num += 1
-        Radiobutton(root, text="Server", variable=self.mode, value="server").grid(row=self.row_num, column=0, sticky="w")
+        Radiobutton(root, text="Server", variable=self.mode, value="server").grid(row=self.row_num, column=0,
+                                                                                  sticky="w")
         self.row_num += 1
 
         Label(root, text="Server IP Address:").grid(row=self.row_num, column=0, sticky="e")
@@ -206,8 +205,6 @@ class App:
             return
         try:
             self.service_to_run = Client(HOST, PORT, self.db_manager)
-            # self.listener = keyboard.Listener(on_press=on_key_press)
-            # self.listener.start()
 
             self.current_thread = threading.Thread(target=self.service_to_run.start_client_services)
             self.current_thread.start()
@@ -221,6 +218,8 @@ class App:
         if self.running:
             return
         try:
+            # TODO: Finish this
+            # self.service_to_run = Server(HOST, PORT, self.db_manager)
             self.current_thread = threading.Thread(target=listen_for_data)
             self.current_thread.start()
             self.running = True
@@ -270,7 +269,6 @@ class App:
         if not confirm:
             return
         try:
-            # DatabaseManager.load_macros_from_db()
             logging.info(f"old MACROS: {MacroManager.get_macros()}")
             MacroManager.delete_macro(macro)
             logging.info(f"new MACROS:{MacroManager.get_macros()}")
@@ -283,10 +281,7 @@ class App:
             messagebox.showerror("Error", "Macro not found in dictionary.")
 
 
-
 if __name__ == "__main__":
-    # DatabaseManager.initialize_db()
-    # DatabaseManager.load_macros_from_db()
     root = Tk()
     root.title("Client/Server App")
     app = App(root)
