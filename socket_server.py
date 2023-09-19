@@ -54,7 +54,7 @@ class Server:
                 self.logger.info("Server started and waiting for connections...")
 
                 client, addr = self.server_socket.accept()
-                logging.info(f"Connection from {addr}")
+                self.logger.info(f"Connection from {addr}")
                 self.handle_connection(client, addr)
 
         except Exception as e:

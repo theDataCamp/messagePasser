@@ -92,12 +92,13 @@ class MacroDBManager:
 
     def apply_transactions(self, transactions):
         session = self.Session()
-        self.logger(f"Going to apply the following transactions: {transactions}")
+        self.logger.info(f"Going to apply the following transactions: {transactions}")
         for transaction in transactions:
             operation = transaction.get("operation")
             hotkey = transaction.get("hotkey")
             actions = transaction.get("actions")
             old_hotkey = transaction.get("old_hotkey")
+            self.logger.info(f"Operation:{operation}, hotkey:{hotkey}, actions: {actions}, old_hotkey: {old_hotkey}")
 
             if operation == "add":
                 self.logger.info(f"We have an 'add' operation, we check to make sure it doesnt exist")
