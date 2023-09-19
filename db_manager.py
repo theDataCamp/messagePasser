@@ -24,6 +24,19 @@ class MacroDBManager:
         self.Session = sessionmaker(bind=self.engine)
         # in memory transactions
         self.transactions = []
+        self.observers = []
+
+    def register_observers(self, observer):
+        self.observers.append(observer)
+
+    def remove_observer(self, observer):
+        self.observers.remove(observer)
+
+    def notify_observers(self, transaction):
+        self.logger.info("Notifying observers")
+        for observer in self.observers:
+            self.logger.info(f"Notifying Observer: {observer} about transaction: {transaction}")
+            observer.update(transaction)
 
     def _log_transaction(self, operation, hotkey, actions=None, old_hotkey=None):
         transaction = {
@@ -43,6 +56,7 @@ class MacroDBManager:
         session.commit()
         session.close()
         self._log_transaction("add", hotkey, actions)
+        self.notify_observers(self.transactions[-1])
 
     def delete_macro(self, hotkey):
         session = self.Session()
@@ -50,6 +64,7 @@ class MacroDBManager:
         session.commit()
         session.close()
         self._log_transaction("delete", hotkey)
+        self.notify_observers(self.transactions[-1])
 
     def edit_macro(self, old_hotkey, new_hotkey, new_actions):
         self.logger.info(f"updating: {old_hotkey} to -> {new_hotkey} actions: {new_actions}")
@@ -62,6 +77,7 @@ class MacroDBManager:
             session.commit()
         session.close()
         self._log_transaction("edit", new_hotkey, new_actions, old_hotkey)
+        self.notify_observers(self.transactions[-1])
 
     def get_all_macros(self):
         session = self.Session()

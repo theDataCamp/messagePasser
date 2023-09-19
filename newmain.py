@@ -10,6 +10,7 @@ from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox
 import pyautogui
 
 from custom_logger import CustomLogger
+from observer_interface import Observer
 from socket_server import Server
 from db_manager import MacroDBManager
 from macro_manager import MacroManager
@@ -128,7 +129,7 @@ def create_actions_from_string(action):
     return actions
 
 
-class App:
+class App(Observer):
     instance = None
 
     def __init__(self, root):
@@ -180,6 +181,10 @@ class App:
         self.running = False
         self.current_thread = None
         self.check_initial_db_for_macros()
+        self.db_manager.register_observers(App.instance)
+
+    def update(self, transaction):
+        self.logger.info(f"Updating Triggered for transaction {transaction}")
 
     def check_initial_db_for_macros(self):
         check = self.db_manager.get_all_macros()
