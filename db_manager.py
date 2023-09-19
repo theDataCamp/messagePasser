@@ -5,6 +5,8 @@ from sqlalchemy import create_engine, Column, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+from custom_logger import CustomLogger
+
 Base = declarative_base()
 
 
@@ -16,6 +18,7 @@ class Macro(Base):
 
 class MacroDBManager:
     def __init__(self, database_url):
+        self.logger = CustomLogger().get_logger("MacroDBManagerClassLogger")
         self.engine = create_engine(database_url)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -32,7 +35,7 @@ class MacroDBManager:
         self.transactions.append(transaction)
 
     def add_macro(self, hotkey, actions):
-        logging.info(f"Adding: {hotkey} with actions: {actions}")
+        self.logger.info(f"Adding: {hotkey} with actions: {actions}")
         session = self.Session()
         serialized_actions = json.dumps(actions)
         new_macro = Macro(hotkey=hotkey, actions=serialized_actions)
@@ -49,7 +52,7 @@ class MacroDBManager:
         self._log_transaction("delete", hotkey)
 
     def edit_macro(self, old_hotkey, new_hotkey, new_actions):
-        logging.info(f"updating: {old_hotkey} to -> {new_hotkey} actions: {new_actions}")
+        self.logger.info(f"updating: {old_hotkey} to -> {new_hotkey} actions: {new_actions}")
         session = self.Session()
         macro = session.query(Macro).filter_by(hotkey=old_hotkey).first()
         if macro:

@@ -1,7 +1,8 @@
-import logging
+from custom_logger import CustomLogger
 
 
 class MacroManager:
+    logger = CustomLogger().get_logger("MacroManagerClassLogger")
     MACROS = {
         "ctrl_l+alt_l+r": ["KEYS:right", "TEXT:Hello"],
         "ctrl_l+alt_l+l": ["KEYS:left"],
@@ -13,7 +14,7 @@ class MacroManager:
     @staticmethod
     def display_macros():
         for key, value in MacroManager.MACROS.items():
-            print(f"{key}: {value}")
+            MacroManager.logger.info(f"{key}: {value}")
 
     @staticmethod
     def get_macros():
@@ -26,7 +27,7 @@ class MacroManager:
     @staticmethod
     def edit_macro(old_hotkey, new_hotkey, new_action):
         if old_hotkey not in MacroManager.MACROS:
-            print("Original key combination not found!")
+            MacroManager.logger.info("Original key combination not found!")
             return
         del MacroManager.MACROS[old_hotkey]
         MacroManager.MACROS[new_hotkey] = [new_action]
@@ -36,9 +37,9 @@ class MacroManager:
         if hotkey in MacroManager.MACROS:
             del MacroManager.MACROS[hotkey]
         else:
-            print("Key combination not found!")
+            MacroManager.logger.info("Key combination not found!")
 
     @staticmethod
     def add_actions(hotkey, actions):
-        logging.info(f"addint {hotkey}, {actions}")
+        MacroManager.logger.info(f"addint {hotkey}, {actions}")
         MacroManager.MACROS[hotkey] = actions

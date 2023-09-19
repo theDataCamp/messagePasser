@@ -1,5 +1,4 @@
 import json
-import logging
 
 
 import random
@@ -10,17 +9,16 @@ from tkinter import Tk, StringVar, Radiobutton, Entry, Button, Label, messagebox
 
 import pyautogui
 
+from custom_logger import CustomLogger
 from socket_server import Server
-
-# Added logging configuration
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
-                                               '[%(module)s.%(funcName)s] %(message)s')
 from db_manager import MacroDBManager
 from macro_manager import MacroManager
 from macro_tree import MacroActionTree
 from socket_client import Client, hash_challenge
 from constants_manager import ConstantsManager
 
+# Getting a logger for the modulw level logging
+module_logger = CustomLogger().get_logger("MainModuleLogger")
 
 # Constants and shared functions
 # Initialize the ConstantsManager with a database URL
@@ -46,24 +44,24 @@ def listen_for_data():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((HOST, PORT))
             s.listen()
-            logging.info("Listening for input...")
+            module_logger.info("Listening for input...")
 
             conn, addr = s.accept()
             handle_server_connection(conn, addr)
     except Exception as e:
-        logging.error(f"Error in listen_for_data: {e}")
+        module_logger.error(f"Error in listen_for_data: {e}")
 
 
 def handle_server_connection(connection, addr):
     with connection:
-        logging.info(f'Connected by {addr}')
+        module_logger.info(f'Connected by {addr}')
 
         if authenticate_client_with_server(connection):
-            logging.info("Authentication successful!")
+            module_logger.info("Authentication successful!")
             connection.sendall(AUTH_SUCCESS.encode())
             main_server_loop(connection)
         else:
-            logging.error("Authentication failed!")
+            module_logger.error("Authentication failed!")
             connection.sendall(AUTH_FAILED.encode())
 
 
@@ -78,7 +76,7 @@ def main_server_loop(connection):
     while True:
         data_received = connection.recv(BUFFER_SIZE).decode()
         if not data_received:
-            logging.warning("Connection lost...")
+            module_logger.warning("Connection lost...")
             break
         process_received_payload(data_received, connection)
 
@@ -93,13 +91,13 @@ def validate_response(response, challenge):
 
 def process_received_payload(data_received, connection):
     payload = json.loads(data_received)
-    logging.info(f"Received payload: {payload}")
+    module_logger.info(f"Received payload: {payload}")
 
     payload_type = payload.get("type")
     if payload_type == "SYNC_MACROS":
-        logging.info("Sync Macros requested")
+        module_logger.info("Sync Macros requested")
     elif payload_type == "exit":
-        logging.info("Exiting...")
+        module_logger.info("Exiting...")
         connection.close()
     elif payload_type == "text":
         pyautogui.write(payload["data"])
@@ -110,7 +108,7 @@ def process_received_payload(data_received, connection):
     elif payload_type == "mouse_move_rel":
         handle_mouse_move_relative(payload)
     else:
-        logging.warning(f"Unknown payload type: {payload_type}")
+        module_logger.warning(f"Unknown payload type: {payload_type}")
 
 
 def handle_mouse_move(payload):
@@ -134,7 +132,8 @@ class App:
     instance = None
 
     def __init__(self, root):
-        logging.info("Initializing app")
+        self.logger = CustomLogger().get_logger("AppClassLogger")
+        self.logger.info("Initializing app")
         self.listener = None
         self.db_manager = MacroDBManager('sqlite:///./macrobs.db')
         self.macro_tree = None
@@ -185,13 +184,13 @@ class App:
     def check_initial_db_for_macros(self):
         check = self.db_manager.get_all_macros()
         if isinstance(check, list) and not check:
-            logging.info("No Macros in DB... assigning defaults")
+            self.logger.info("No Macros in DB... assigning defaults")
             for hotkey, actions in MacroManager.get_macros().items():
-                logging.info(f"Adding hotkey:{hotkey} and actions: {actions} to db")
+                self.logger.info(f"Adding hotkey:{hotkey} and actions: {actions} to db")
                 self.db_manager.add_macro(hotkey, actions)
                 self.macro_tree.insert(hotkey, actions)
         elif isinstance(check, list):
-            logging.info("Macros already in DB, skipping assigning defaults, but loading tree")
+            self.logger.info("Macros already in DB, skipping assigning defaults, but loading tree")
             for item in check:
                 self.macro_tree.insert(item['hotkey'], item['actions'])
                 MacroManager.add_actions(item['hotkey'], item['actions'])
@@ -248,16 +247,16 @@ class App:
         action = simpledialog.askstring("Input", "Enter the action:") if hotkey else None
         actions = create_actions_from_string(action)
         if hotkey and action:
-            logging.info(f"Adding Macro: hotkey:{hotkey} action:{action} or actions: {actions}")
+            self.logger.info(f"Adding Macro: hotkey:{hotkey} action:{action} or actions: {actions}")
             self.macro_tree.insert(hotkey, actions)
             self.db_manager.add_macro(hotkey, actions)
             MacroManager.add_actions(hotkey, actions)
             if isinstance(self.service_to_run, Client) and self.service_to_run is not None:
-                logging.info("We have a Client service and its not empty so we will send the add across to server")
+                self.logger.info("We have a Client service and its not empty so we will send the add across to server")
                 transactions = self.db_manager.get_all_transactions()
                 if transactions is not None:
                     if transactions:
-                        logging.info(f"We have transactions to send: {transactions}")
+                        self.logger.info(f"We have transactions to send: {transactions}")
                 # self.service_to_run.send_data()
 
     def edit_macro(self):
@@ -283,11 +282,11 @@ class App:
         if not confirm:
             return
         try:
-            logging.info(f"old MACROS: {MacroManager.get_macros()}")
+            self.logger.info(f"old MACROS: {MacroManager.get_macros()}")
             MacroManager.delete_macro(macro)
-            logging.info(f"new MACROS:{MacroManager.get_macros()}")
+            self.logger.info(f"new MACROS:{MacroManager.get_macros()}")
             # Delete from database
-            logging.info(f"delete_macro: looking for DB hotkey: {macro}")
+            self.logger.info(f"delete_macro: looking for DB hotkey: {macro}")
             self.db_manager.delete_macro(macro)
             self.macro_tree.delete_selected()
 

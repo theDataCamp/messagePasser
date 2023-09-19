@@ -7,7 +7,11 @@ import time
 from pynput import keyboard
 
 from constants_manager import ConstantsManager
+from custom_logger import CustomLogger
 from macro_manager import MacroManager
+
+# Getting a logger for the modulw level logging
+module_logger = CustomLogger().get_logger("SocketClientModuleLogger")
 
 # Constants and shared functions
 # Initialize the ConstantsManager with a database URL
@@ -24,11 +28,11 @@ key_press_times = {}
 def on_key_press(key):
     try:
         key_name = key.char  # For regular keys
-        logging.info(f"it is a char (regular keys)")
+        module_logger.info(f"it is a char (regular keys)")
 
     except AttributeError:
         key_name = key.name  # For special keys
-        logging.info(f"it is a name (special key)")
+        module_logger.info(f"it is a name (special key)")
 
     logging.info(f"Key pressed: {key_name}")
     key_press_times[key_name] = time.time()
@@ -44,6 +48,7 @@ def hash_challenge(challenge):
 
 class Client:
     def __init__(self, host, port, db_manager):
+        self.logger = CustomLogger().get_logger("ClientClassLogger")
         self.host = host
         self.port = port
         self.client_socket = None
@@ -57,16 +62,16 @@ class Client:
         logging.info("Starting main client loop...")
         try:
             self.listener.start()
-            logging.info("Keyboard listener started")
+            self.logger.info("Keyboard listener started")
             with socket.create_connection((self.host, self.port)) as self.client_socket:
-                logging.info("Client socket created successfully, authenticating...")
+                self.logger.info("Client socket created successfully, authenticating...")
                 if not self.authenticate_server_with_client():
-                    logging.error("Authentication failed :(")
+                    self.logger.error("Authentication failed :(")
                     return
-                logging.info("Authentication Success!")
+                self.logger.info("Authentication Success!")
                 self.main_client_loop()
         except Exception as e:
-            logging.error(f"Error in sending data to slave: {e}")
+            self.logger.error(f"Error in sending data to slave: {e}")
 
     def main_client_loop(self):
         while True:
@@ -82,13 +87,13 @@ class Client:
         if keys_pressed_recently(required_keys):
             for key in required_keys:
                 key_press_times.pop(key, None)
-            logging.info(f"Will execute macro: {hotkey}")
+            self.logger.info(f"Will execute macro: {hotkey}")
             return True
         return False
 
     def process_and_send_command(self, user_input):
         try:
-            logging.info(f"Processing command: {user_input}")
+            self.logger.info(f"Processing command: {user_input}")
 
             if user_input.startswith("EXIT:"):
                 payload = {"type": "exit"}
@@ -99,12 +104,12 @@ class Client:
                 keys = user_input[len("KEYS:"):].strip().split('+')
                 payload = {"type": "keys", "data": keys}
             else:
-                logging.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
+                self.logger.error("Invalid command. Please use TEXT:, KEYS:, or EXIT: as a prefix.")
                 return
 
             self.send_data(payload)
         except Exception as e:
-            logging.error(f"Error processing command for input {user_input}: {e}")
+            self.logger.error(f"Error processing command for input {user_input}: {e}")
 
     def authenticate_server_with_client(self):
         challenge = self.client_socket.recv(BUFFER_SIZE).decode()
@@ -115,7 +120,7 @@ class Client:
 
     def send_data(self, data):
         message = json.dumps(data)
-        logging.info(f"Sending message {message} to server")
+        self.logger.info(f"Sending message {message} to server")
         self.client_socket.sendall(message.encode('utf-8'))
 
     def close(self):

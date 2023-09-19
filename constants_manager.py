@@ -1,10 +1,10 @@
 # constants_manager.py
-import logging
-
 from sqlalchemy import create_engine, Column, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import json
+
+from custom_logger import CustomLogger
 
 Base = declarative_base()
 
@@ -64,8 +64,10 @@ class ConstantsManager:
 
     def __new__(cls, database_url=None):
         if not cls._instance:
-            logging.debug("This is the first creation of this instance")
             cls._instance = super(ConstantsManager, cls).__new__(cls)
+            # Initialize any attributes you want to set once
+            cls._instance.init_once()
+            cls._instance.logger.debug("This is the first creation of this instance")
             cls._instance._cache = {}
             if database_url:
                 cls._instance.engine = create_engine(database_url)
@@ -74,28 +76,33 @@ class ConstantsManager:
                 cls._instance._load_constants_into_cache()
         return cls._instance
 
+    def init_once(self):
+        # This method initializes attributes only once for the singleton instance
+        self.logger = CustomLogger().get_logger("SpecialClassLogger")
+        self.some_attribute = "initialized"
+
     def _load_constants_into_cache(self):
         if not self._is_initialized:
-            logging.debug("First time being initialized")
+            self.logger.debug("First time being initialized")
             session = self.Session()
 
             # Fetch existing constants from the DB
-            logging.debug("Fetching constants from DB")
+            self.logger.debug("Fetching constants from DB")
             constants_from_db = session.query(Constants).all()
             existing_constants = {const.name: json.loads(const.value) for const in constants_from_db}
 
             # Set defaults for any constants not in the DB
-            logging.debug("Set defaults for any constants not in the DB")
+            self.logger.debug("Set defaults for any constants not in the DB")
             for name, value in self.DEFAULT_CONSTANTS.items():
                 if name not in existing_constants:
-                    logging.debug(f"{name} was not in DB, adding it to DB now")
+                    self.logger.debug(f"{name} was not in DB, adding it to DB now")
                     serialized_value = json.dumps(value)
                     const = Constants(name=name, value=serialized_value)
                     session.add(const)
                     existing_constants[name] = value
 
             # Update the cache
-            logging.debug("Updating constants cache with all existing constants (DB and default values)")
+            self.logger.debug("Updating constants cache with all existing constants (DB and default values)")
             self._cache = existing_constants
 
             session.commit()
@@ -108,7 +115,7 @@ class ConstantsManager:
             return cached_value
 
         # If the value wasn't in cache (for some reason), fetch from the database and deserialize
-        logging.info(f"{name} not found in cache, searching DB for it")
+        self.logger.info(f"{name} not found in cache, searching DB for it")
         session = self.Session()
         const = session.query(Constants).filter_by(name=name).first()
         session.close()
@@ -116,20 +123,20 @@ class ConstantsManager:
             deserialized_value = json.loads(const.value)
             self._cache[name] = deserialized_value  # Cache it for future retrievals
             return deserialized_value
-        logging.info(f"{name} was not found in cache or DB")
+        self.logger.info(f"{name} was not found in cache or DB")
         return None  # If the constant wasn't found
 
     def set(self, name, value):
-        logging.info(f"Adding {name}, {value} to constants")
+        self.logger.info(f"Adding {name}, {value} to constants")
         session = self.Session()
         serialized_value = json.dumps(value)  # Convert value to its JSON string representation
         const = session.query(Constants).filter_by(name=name).first()
         if not const:
-            logging.info(f"{name} did not exist, adding now")
+            self.logger.info(f"{name} did not exist, adding now")
             const = Constants(name=name)
             session.add(const)
         const.value = serialized_value
         self._cache[name] = value  # Cache the original type
-        logging.info(f"{name} cached and added to DB with val: {value}")
+        self.logger.info(f"{name} cached and added to DB with val: {value}")
         session.commit()
         session.close()

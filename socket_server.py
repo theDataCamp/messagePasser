@@ -7,6 +7,10 @@ import json
 import pyautogui
 
 from constants_manager import ConstantsManager
+from custom_logger import CustomLogger
+
+# Getting a logger for the modulw level logging
+module_logger = CustomLogger().get_logger("SocketServerModuleLogger")
 
 # Constants and shared functions
 # Initialize the ConstantsManager with a database URL
@@ -35,6 +39,7 @@ def hash_challenge(challenge):
 
 class Server:
     def __init__(self, host, port, db_manager):
+        self.logger = CustomLogger().get_logger("ServerClassLogger")
         self.server_socket = None
         # self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # self.server_socket.bind((host, port))
@@ -46,14 +51,14 @@ class Server:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as self.server_socket:
                 self.server_socket.bind((HOST, PORT))
                 self.server_socket.listen()
-                logging.info("Server started and waiting for connections...")
+                self.logger.info("Server started and waiting for connections...")
 
                 client, addr = self.server_socket.accept()
                 logging.info(f"Connection from {addr}")
                 self.handle_connection(client, addr)
 
         except Exception as e:
-            logging.error(f"Error in listen_for_data: {e}")
+            self.logger.error(f"Error in listen_for_data: {e}")
 
     # TODO: change this to handle correct data if we want to do it this way
     def handle_data(self, data):
@@ -69,13 +74,13 @@ class Server:
             self.db_manager.delete_macro(hotkey)
 
     def close(self):
-        logging.info("Closing server socket")
+        self.logger.info("Closing server socket")
         self.server_socket.close()
 
     def handle_connection(self, client, addr):
         with client:
             if self.authenticate(client):
-                logging.info("Authentication successful")
+                self.logger.info("Authentication successful")
                 client.sendall(AUTH_SUCCESS.encode())
                 self.main_server_loop(client)
 
@@ -96,12 +101,12 @@ class Server:
     # TODO: Finsih this
     def process_received_payload(self, data_received, client):
         payload = json.loads(data_received)
-        logging.info(f"Received type:{type(payload)} payload:{payload}")
+        self.logger.info(f"Received type:{type(payload)} payload:{payload}")
         payload_type = payload.get("type")
         if payload_type == "SYNC_MACROS":
-            logging.info(f"Sync Macros requested")
+            self.logger.info(f"Sync Macros requested")
         elif payload_type == "exit":
-            logging.info("Exiting...")
+            self.logger.info("Exiting...")
             client.close()
         elif payload_type == "text":
             pyautogui.write(payload["data"])
@@ -112,7 +117,7 @@ class Server:
         elif payload_type == "mouse_move_rel":
             self.handle_mouse_move_relative(payload)
         else:
-            logging.warning(f"Unknown payload type: {payload_type}")
+            self.logger.warning(f"Unknown payload type: {payload_type}")
 
     def handle_mouse_move(self, payload):
         x, y = payload["data"]["x"], payload["data"]["y"]
