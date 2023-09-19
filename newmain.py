@@ -255,11 +255,16 @@ class App:
             MacroManager.add_actions(hotkey, actions)
             if isinstance(self.service_to_run, Client) and self.service_to_run is not None:
                 self.logger.info("We have a Client service and its not empty so we will send the add across to server")
-                transactions = self.db_manager.get_all_transactions()
-                if transactions is not None:
-                    if transactions:
-                        self.logger.info(f"We have transactions to send: {transactions}")
+                self.check_and_send_db_transactions()
                 # self.service_to_run.send_data()
+
+    def check_and_send_db_transactions(self):
+        transactions = self.db_manager.get_all_transactions()
+        if transactions is not None:
+            if transactions:
+                self.logger.info(f"We have transactions to send: {transactions}")
+                self.service_to_run.create_db_sync_payload_and_send(transactions)
+                self.db_manager.clear_transactions()
 
     def edit_macro(self):
         macro, actions = self.macro_tree.get_selected()
@@ -274,6 +279,7 @@ class App:
                 self.macro_tree.edit_selected(new_macro, new_action)
                 self.db_manager.edit_macro(macro, new_macro, actions)
                 MacroManager.edit_macro(macro, new_macro, new_action)
+                self.check_and_send_db_transactions()
 
     def delete_macro(self):
         macro, actions = self.macro_tree.get_selected()
@@ -291,6 +297,7 @@ class App:
             self.logger.info(f"delete_macro: looking for DB hotkey: {macro}")
             self.db_manager.delete_macro(macro)
             self.macro_tree.delete_selected()
+            self.check_and_send_db_transactions()
 
         except KeyError:
             messagebox.showerror("Error", "Macro not found in dictionary.")

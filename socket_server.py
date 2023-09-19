@@ -105,6 +105,9 @@ class Server:
         payload_type = payload.get("type")
         if payload_type == "SYNC_MACROS":
             self.logger.info(f"Sync Macros requested")
+            transactions = payload["data"]
+            self.logger.info(f"Applying transactions to DB: {transactions}")
+            self.db_manager.apply_transactions(transactions)
         elif payload_type == "exit":
             self.logger.info("Exiting...")
             client.close()

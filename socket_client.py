@@ -111,6 +111,11 @@ class Client:
         except Exception as e:
             self.logger.error(f"Error processing command for input {user_input}: {e}")
 
+    def create_db_sync_payload_and_send(self, transactions):
+        payload = {"type": "SYNC_MACROS", "data": transactions}
+        self.logger.info(f"We will be sending over the payload: {payload}")
+        self.send_data(data=payload)
+
     def authenticate_server_with_client(self):
         challenge = self.client_socket.recv(BUFFER_SIZE).decode()
         response = hash_challenge(challenge)

@@ -87,11 +87,12 @@ class MacroDBManager:
         return self.transactions
 
     def clear_transactions(self):
+        self.logger.info("Clearing all transactions")
         self.transactions.clear()
 
     def apply_transactions(self, transactions):
         session = self.Session()
-
+        self.logger(f"Going to apply the following transactions: {transactions}")
         for transaction in transactions:
             operation = transaction.get("operation")
             hotkey = transaction.get("hotkey")
@@ -99,23 +100,31 @@ class MacroDBManager:
             old_hotkey = transaction.get("old_hotkey")
 
             if operation == "add":
+                self.logger.info(f"We have an 'add' operation, we check to make sure it doesnt exist")
                 if not session.query(Macro).filter_by(hotkey=hotkey).first():
                     serialized_actions = json.dumps(actions)
                     new_macro = Macro(hotkey=hotkey, actions=serialized_actions)
+                    self.logger(f"Adding new macro: {new_macro}")
                     session.add(new_macro)
 
             elif operation == "edit":
+                self.logger.info(f"Edit operation requested")
                 if old_hotkey:
+                    self.logger.info(f"Olf Hotkey present, checking to see if it exists")
                     macro = session.query(Macro).filter_by(hotkey=old_hotkey).first()
                     if macro:
+                        self.logger.info(f"Old Hotkey exists, updating to new hotkey and new actions")
                         macro.hotkey = hotkey  # Update to new hotkey
                         macro.actions = json.dumps(actions)
                 else:
+                    self.logger.info(f"We will be only updating the actions to the hotkey (if exists): {hotkey}")
                     macro = session.query(Macro).filter_by(hotkey=hotkey).first()
                     if macro:
+                        self.logger.info(f"macro exists, we will update with new actions: {actions}")
                         macro.actions = json.dumps(actions)
 
             elif operation == "delete":
+                self.logger.info(f"Delete operation requested")
                 session.query(Macro).filter_by(hotkey=hotkey).delete()
 
         session.commit()
