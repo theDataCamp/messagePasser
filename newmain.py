@@ -189,6 +189,8 @@ class App:
                 self.logger.info(f"Adding hotkey:{hotkey} and actions: {actions} to db")
                 self.db_manager.add_macro(hotkey, actions)
                 self.macro_tree.insert(hotkey, actions)
+            self.logger.info("Clearing all DB transactions bc we loaded from MacroManager")
+            self.db_manager.clear_transactions()
         elif isinstance(check, list):
             self.logger.info("Macros already in DB, skipping assigning defaults, but loading tree")
             for item in check:
