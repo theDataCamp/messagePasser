@@ -184,7 +184,19 @@ class App(Observer):
         self.db_manager.register_observers(App.instance)
 
     def update(self, transaction):
-        self.logger.info(f"Updating Triggered for transaction {transaction}")
+        self.logger.info(f"Updating Tree with incoming transaction {transaction}")
+        operation = transaction.get("operation")
+        hotkey = transaction.get("hotkey")
+        actions = transaction.get("actions")
+        old_hotkey = transaction.get("old_hotkey")
+        self.logger.info(f"Operation:{operation}, hotkey:{hotkey}, actions: {actions}, old_hotkey: {old_hotkey}")
+
+        if operation == "add":
+            self.macro_tree.insert(hotkey, actions)
+        elif operation == "edit":
+            self.macro_tree.edit_by_macro(old_hotkey, hotkey, actions)
+        elif operation == "delete":
+            self.macro_tree.delete_by_macro(hotkey)
 
     def check_initial_db_for_macros(self):
         check = self.db_manager.get_all_macros()

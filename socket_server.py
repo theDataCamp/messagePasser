@@ -94,11 +94,10 @@ class Server:
         while True:
             data_received = client.recv(BUFFER_SIZE).decode()
             if not data_received:
-                logging.warning("Connection lost with client")
+                self.logger.warning("Connection lost with client")
                 break
             self.process_received_payload(data_received, client)
 
-    # TODO: Finsih this
     def process_received_payload(self, data_received, client):
         payload = json.loads(data_received)
         self.logger.info(f"Received type:{type(payload)} payload:{payload}")

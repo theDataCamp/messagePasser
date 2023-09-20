@@ -50,31 +50,45 @@ class MacroDBManager:
     def add_macro(self, hotkey, actions):
         self.logger.info(f"Adding: {hotkey} with actions: {actions}")
         session = self.Session()
-        serialized_actions = json.dumps(actions)
-        new_macro = Macro(hotkey=hotkey, actions=serialized_actions)
-        session.add(new_macro)
-        session.commit()
-        session.close()
-        self._log_transaction("add", hotkey, actions)
-        self.notify_observers(self.transactions[-1])
+        if not session.query(Macro).filter_by(hotkey=hotkey).first():
+            serialized_actions = json.dumps(actions)
+            new_macro = Macro(hotkey=hotkey, actions=serialized_actions)
+            self.logger.info(f"Adding new macro:{new_macro}")
+            session.add(new_macro)
+            session.commit()
+            session.close()
+            self._log_transaction("add", hotkey, actions)
+            self.notify_observers(self.transactions[-1])
+        else:
+            self.logger.warning(f"Hotkey: {hotkey} already in DB, skipping add")
 
     def delete_macro(self, hotkey):
         session = self.Session()
-        session.query(Macro).filter_by(hotkey=hotkey).delete()
+        macro = session.query(Macro).filter_by(hotkey=hotkey).first()
+        if macro:
+            session.query(Macro).filter_by(hotkey=hotkey).delete()
         session.commit()
         session.close()
         self._log_transaction("delete", hotkey)
         self.notify_observers(self.transactions[-1])
 
     def edit_macro(self, old_hotkey, new_hotkey, new_actions):
-        self.logger.info(f"updating: {old_hotkey} to -> {new_hotkey} actions: {new_actions}")
+        # self.logger.info(f"updating: {old_hotkey} to -> {new_hotkey} actions: {new_actions}")
         session = self.Session()
-        macro = session.query(Macro).filter_by(hotkey=old_hotkey).first()
-        if macro:
-            logging.info(f"found old macro, beginning update")
-            macro.hotkey = new_hotkey
-            macro.actions = json.dumps(new_actions)
-            session.commit()
+        if old_hotkey:
+            self.logger.info(f"Old Hotkey present, checking to see if it exists")
+            macro = session.query(Macro).filter_by(hotkey=old_hotkey).first()
+            if macro:
+                logging.info(f"found old macro, beginning update")
+                macro.hotkey = new_hotkey
+                macro.actions = json.dumps(new_actions)
+        else:
+            self.logger.info(f"We will only be updating the actions of hotkey: {new_hotkey} if exists")
+            macro = session.query(Macro).filter_by(hotkey=new_hotkey).first()
+            if macro:
+                self.logger.info(f"macro esists, updating actions to: {new_actions}")
+                macro.actions = json.dumps(new_actions)
+        session.commit()
         session.close()
         self._log_transaction("edit", new_hotkey, new_actions, old_hotkey)
         self.notify_observers(self.transactions[-1])
@@ -107,7 +121,7 @@ class MacroDBManager:
         self.transactions.clear()
 
     def apply_transactions(self, transactions):
-        session = self.Session()
+        # session = self.Session()
         self.logger.info(f"Going to apply the following transactions: {transactions}")
         for transaction in transactions:
             operation = transaction.get("operation")
@@ -117,32 +131,15 @@ class MacroDBManager:
             self.logger.info(f"Operation:{operation}, hotkey:{hotkey}, actions: {actions}, old_hotkey: {old_hotkey}")
 
             if operation == "add":
-                self.logger.info(f"We have an 'add' operation, we check to make sure it doesnt exist")
-                if not session.query(Macro).filter_by(hotkey=hotkey).first():
-                    serialized_actions = json.dumps(actions)
-                    new_macro = Macro(hotkey=hotkey, actions=serialized_actions)
-                    self.logger(f"Adding new macro: {new_macro}")
-                    session.add(new_macro)
+                self.logger.info("Add operation requested")
+                self.add_macro(hotkey, actions)
+                self.clear_transactions()
 
             elif operation == "edit":
                 self.logger.info(f"Edit operation requested")
-                if old_hotkey:
-                    self.logger.info(f"Olf Hotkey present, checking to see if it exists")
-                    macro = session.query(Macro).filter_by(hotkey=old_hotkey).first()
-                    if macro:
-                        self.logger.info(f"Old Hotkey exists, updating to new hotkey and new actions")
-                        macro.hotkey = hotkey  # Update to new hotkey
-                        macro.actions = json.dumps(actions)
-                else:
-                    self.logger.info(f"We will be only updating the actions to the hotkey (if exists): {hotkey}")
-                    macro = session.query(Macro).filter_by(hotkey=hotkey).first()
-                    if macro:
-                        self.logger.info(f"macro exists, we will update with new actions: {actions}")
-                        macro.actions = json.dumps(actions)
+                self.edit_macro(old_hotkey, hotkey, actions)
+                self.clear_transactions()
 
             elif operation == "delete":
-                self.logger.info(f"Delete operation requested")
-                session.query(Macro).filter_by(hotkey=hotkey).delete()
-
-        session.commit()
-        session.close()
+                self.delete_macro(hotkey)
+                self.clear_transactions()

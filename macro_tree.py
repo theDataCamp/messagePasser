@@ -65,3 +65,21 @@ class MacroActionTree:
         # clear all the items from the treeview
         for item in self.tree.get_children():
             self.tree.delete(item)
+
+    def find_item_by_macro(self, macro):
+        for item in self.tree.get_children():
+            if self.tree.item(item, "value")[0] == macro:
+                return item
+        return None
+
+    def edit_by_macro(self, macro, new_macro, new_action):
+        """Edit an item based on its macro value"""
+        item = self.find_item_by_macro(macro)
+        if item:
+            self.tree.item(item, values=(new_macro, new_action))
+
+    def delete_by_macro(self, macro):
+        """Delete an item based on its macro value"""
+        item = self.find_item_by_macro(macro)
+        if item:
+            self.tree.delete(item)
