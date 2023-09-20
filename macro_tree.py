@@ -1,9 +1,12 @@
 from tkinter import ttk
 
+from custom_logger import CustomLogger
+
 
 class MacroActionTree:
 
     def __init__(self, master, row_num):
+        self.logger = CustomLogger().get_logger("MacroActionTreeClassLogger")
         self.last_used_row = row_num
         # Container frame for Treeview and Scrollbars
         self.container = ttk.Frame(master)
@@ -39,6 +42,11 @@ class MacroActionTree:
         self.container.grid_columnconfigure(0, weight=1)
 
     def insert(self, macro, action):
+        item = self.find_item_by_macro(macro)
+        if item:
+            self.logger.info(f"Skipping add of {macro} since it exists in tree")
+            return
+        self.logger.debug(f"Adding {macro}to tree")
         self.tree.insert("", "end", values=(macro, action))
 
     def edit_selected(self, new_macro, new_action):
@@ -77,9 +85,13 @@ class MacroActionTree:
         item = self.find_item_by_macro(macro)
         if item:
             self.tree.item(item, values=(new_macro, new_action))
+        else:
+            self.logger.warning(f"Hotkey:{macro} does not exist, skipping edit")
 
     def delete_by_macro(self, macro):
         """Delete an item based on its macro value"""
         item = self.find_item_by_macro(macro)
         if item:
             self.tree.delete(item)
+        else:
+            self.logger.warning(f"hotkey:{macro} does not exists, skipping delete")
