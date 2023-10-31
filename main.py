@@ -16,7 +16,6 @@ import sqlite3
 from db_manager import MacroDBManager
 from macro_tree import MacroActionTree
 
-# Constants and shared functions
 
 # Added logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] [%(threadName)s] '
